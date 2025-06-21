@@ -17,21 +17,18 @@ impl DoomFire {
         background_colour: Option<[u8; 3]>,
     ) -> Self {
         let size = width * height;
-        let mut pixel_buffer = vec![0; size];
+        let pixel_buffer = vec![0; size];
         let palette = generate_palette(palette_type, background_colour);
 
-        // Initialize the bottom row of the fire
-        for x in 0..width {
-            pixel_buffer[(height - 1) * width + x] = (palette.len() - 1) as u8;
-        }
-
-        Self {
+        let mut doom_fire = Self {
             width,
             height,
             pixel_buffer,
             palette,
             t: 0.0,
-        }
+        };
+        doom_fire.initialize_fire();
+        doom_fire
     }
 
     pub fn update(&mut self) {
@@ -57,7 +54,14 @@ impl DoomFire {
             }
         }
     }
+    pub fn initialize_fire(&mut self) {
+        self.pixel_buffer.fill(0);
+        for x in 0..self.width {
+            self.pixel_buffer[(self.height - 1) * self.width + x] = (self.palette.len() - 1) as u8;
+        }
+    }
 }
+
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]

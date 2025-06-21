@@ -10,22 +10,23 @@ use std::{fs, time::Instant};
 
 
 fn main() -> anyhow::Result<()> {
+    // Fire effect parameters
     let screen_width = 1920;
     let screen_height = 1080;
     let scale = 4;  // scale factor to change the size of the fire effect
-    let fps = 14;
-    let mut fire = DoomFire::new(screen_width / scale, screen_height / scale, doom_fire::FirePalette::WhiteHot, Some([5,2,40]));
+    let fps = 23;
+    // Set your output name here (use `wlr-randr` or `hyprctl monitors` to find it)
+    let output = ""; // leave empty for all outputs, or set to a specific output name
 
+    let mut fire = DoomFire::new(screen_width / scale, screen_height / scale, doom_fire::FirePalette::Original, None);
     let cache_dir = dirs::home_dir()
         .expect("Could not find home directory")
         .join(".cache/hyprpaper");
     fs::create_dir_all(&cache_dir)?;
 
-    // Set your output name here (use `wlr-randr` or `hyprctl monitors` to find it)
-    let output = ""; // leave empty for all outputs, or set to a specific output name
 
     let wallpaper_path = cache_dir.join("doomfire.webp");
-
+    let mut restart_animation = false;
     loop {
         let covered = is_all_screens_covered();
         let sleeping = is_system_sleeping();
@@ -33,7 +34,20 @@ fn main() -> anyhow::Result<()> {
         if covered || sleeping {
             println!("Waiting for screens to be uncovered or system to wake up...");
             std::thread::sleep(std::time::Duration::from_millis(10));
+            if !restart_animation {
+                restart_animation = true;
+                fire.initialize_fire();
+                let img = render_fire_frame_to_image(&fire, scale)?;
+                let mut file = std::fs::File::create(&wallpaper_path)?;
+                img.write_to(&mut file, image::ImageFormat::WebP)?;
+                load_wallpaper(&wallpaper_path, output)?;
+            }
             continue;
+        }
+        if restart_animation  {
+            println!("Restarting animation...");
+            fire.initialize_fire();
+            restart_animation = false;
         }
         let start = Instant::now();
 
@@ -42,10 +56,8 @@ fn main() -> anyhow::Result<()> {
         let img = render_fire_frame_to_image(&fire, scale)?;
 
         // Save as WebP
-        {
-            let mut file = std::fs::File::create(&wallpaper_path)?;
-            img.write_to(&mut file, image::ImageFormat::WebP)?;
-        }
+        let mut file = std::fs::File::create(&wallpaper_path)?;
+        img.write_to(&mut file, image::ImageFormat::WebP)?;
 
         // Tell Hyprpaper to reload the wallpaper
        load_wallpaper(&wallpaper_path, output)?;
