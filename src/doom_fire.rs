@@ -34,11 +34,11 @@ impl DoomFire {
         let noise_val = perlin_noise_1d(self.t * 1.5); // Higher frequency
         let jitter: f64 = rng.gen_range(-0.5..=0.5);   // Add some randomness
         let wind = ((noise_val + jitter) * 1.0).round() as isize;
-
+        let delay_chance = 0.3; 
         for y in (2..self.height).rev() {
             for x in 0..self.width {
                 let src = y * self.width + x;
-                let decay = rng.gen_range(0..=1);
+                let decay = rng.gen_bool(delay_chance) as u8; // Random decay factor
                 let x_offset = rng.gen_range(0..3) as isize - 1 + wind;
                 let dst_x = x as isize + x_offset;
                 let dst_y = if rng.gen_bool(0.3) { y - 2 } else { y - 1 };
