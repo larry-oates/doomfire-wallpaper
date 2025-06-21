@@ -45,13 +45,13 @@ This project generates a real-time animated fire effect, saves each frame as a W
    This script will:
    - Build the project
    - Copy the binary to `~/.local/bin`
-   - Create an example config file at `~/.config/doomfire_wallpaper/config.toml` (if it doesn't exist)
-   - Install a systemd user service for autostart at `~/.config/systemd/user/doomfire_wallpaper.service`
+   - Create an example config file at `~/.config/doom-fire-wallpaper/config.toml` (if it doesn't exist)
+   - Install a systemd user service for autostart at `~/.config/systemd/user/doom-fire-wallpaper.service`
 
    After running the script, enable and start the service with:
    ```sh
    systemctl --user daemon-reload
-   systemctl --user enable --now doomfire_wallpaper.service
+   systemctl --user enable --now doom-fire-wallpaper.service
    ```
 
 **Or run manually:**
@@ -59,7 +59,7 @@ This project generates a real-time animated fire effect, saves each frame as a W
    hyprpaper &
    cargo run --release
    ```
-   Or run the binary directly from `target/release/doomfire_wallpaper`.
+   Or run the binary directly from `target/release/doom-fire-wallpaper`.
 
   3. **Enable hyprpaper**
 
@@ -104,7 +104,7 @@ systemctl --user enable --now hyprpaper.service
 
 ## Configuration
 
-Create or edit the config file at `~/.config/doomfire_wallpaper/config.toml`:
+Create or edit the config file at `~/.config/doom-fire-wallpaper/config.toml`:
 
 ```toml
 screen_width = 1920

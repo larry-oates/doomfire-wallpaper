@@ -25,7 +25,7 @@ impl Config {
     fn load() -> Self {
         let config_path = dirs::home_dir()
             .expect("Could not find home directory")
-            .join(".config/doomfire_wallpaper/config.toml");
+            .join(".config/doom-fire-wallpaper/config.toml");
         let config_str = fs::read_to_string(config_path).unwrap_or_default();
         toml::from_str(&config_str).unwrap_or_default()
     }
