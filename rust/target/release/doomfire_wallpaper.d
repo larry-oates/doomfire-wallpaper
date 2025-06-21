@@ -1,1 +1,0 @@
-/home/leafman123/Documents/doomfire_wallpaper/rust/target/release/doomfire_wallpaper: /home/leafman123/Documents/doomfire_wallpaper/rust/src/doom_fire.rs /home/leafman123/Documents/doomfire_wallpaper/rust/src/main.rs /home/leafman123/Documents/doomfire_wallpaper/rust/src/perlin.rs /home/leafman123/Documents/doomfire_wallpaper/rust/src/render.rs
