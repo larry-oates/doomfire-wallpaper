@@ -32,8 +32,8 @@ This project generates a real-time animated fire effect, saves each frame as a W
 
 1. **Clone the repository:**
    ```sh
-   git clone https://github.com/Leafmun-certii/arch_linux_doom_fire_wallpaper.git
-   cd arch_linux_doom_fire_wallpaper
+   git clone https://github.com/Leafmun-certii/doom_fire_wallpaper.git
+   cd doom_fire_wallpaper
    ```
 
 
