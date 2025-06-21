@@ -12,3 +12,4 @@ rand = "0.8"           # For randomness in fire decay and wind
 anyhow = "1.0"         # For easy error handling
 dirs = "5.0"           # For getting the user's home directory
 rayon = "1.8"          # For parallel rending
+serde_json = "1.0.140"
