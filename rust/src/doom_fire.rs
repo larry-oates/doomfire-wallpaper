@@ -30,9 +30,10 @@ impl DoomFire {
 
     pub fn update(&mut self) {
         let mut rng = rand::thread_rng();
-        self.t += 0.01;
-        let noise_val = perlin_noise_1d(self.t);
-        let wind = (noise_val * 2.0).round() as isize;
+        self.t += 0.03; // Increase frequency for more rapid wind changes
+        let noise_val = perlin_noise_1d(self.t * 1.5); // Higher frequency
+        let jitter: f64 = rng.gen_range(-0.5..=0.5);   // Add some randomness
+        let wind = ((noise_val + jitter) * 1.0).round() as isize;
 
         for y in (2..self.height).rev() {
             for x in 0..self.width {
