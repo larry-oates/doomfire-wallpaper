@@ -23,7 +23,6 @@ pub fn render_fire_frame_to_image(fire: &DoomFire, scale: usize) -> anyhow::Resu
                 row[out_idx + 2] = color[2];
             }
         });
-
     Ok(img)
 }
 

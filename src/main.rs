@@ -14,7 +14,7 @@ fn main() -> anyhow::Result<()> {
     let screen_height = 1080;
     let scale = 4;  // scale factor to change the size of the fire effect
     let fps = 14;
-    let mut fire = DoomFire::new(screen_width / scale, screen_height / scale);
+    let mut fire = DoomFire::new(screen_width / scale, screen_height / scale, doom_fire::FirePalette::WhiteHot, Some([5,2,40]));
 
     let cache_dir = dirs::home_dir()
         .expect("Could not find home directory")
