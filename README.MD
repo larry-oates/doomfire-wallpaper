@@ -1,6 +1,6 @@
 # DOOM fire Wallpaper for hyprpaper
 
-Animated [Doom fire effect](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper for [Hyprpaper](https://github.com/hyprwm/hyprpaper) on Linux built with rust.
+Animated [Doom fire effect](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper for [Hyprpaper](https://github.com/hyprwm/hyprpaper) on Linux built with Rust.
 
 This project generates a real-time animated fire effect, saves each frame as a WebP image, and updates your wallpaper using Hyprpaper for a seamless, living flame desktop background.
 
@@ -9,10 +9,12 @@ This project generates a real-time animated fire effect, saves each frame as a W
 ## Features
 
 - **Real-time animated fire**: Classic DOOM-style fire simulation.
+- **Multiple color palettes**: Original, blue, rainbow, green, purple, white-hot... add your own!
 - **Parallel rendering**: Uses all CPU cores for fast frame generation.
 - **WebP output**: Efficient, high-quality image format.
 - **Hyprpaper integration**: Automatically updates your wallpaper.
-- **Configurable resolution and speed**.
+- **Configurable via TOML file**: Resolution, speed, palette, background color, ect.
+- **Auto-pause**: Animation pauses when all screens are covered or system is sleeping.
 
 ---
 
@@ -30,11 +32,11 @@ This project generates a real-time animated fire effect, saves each frame as a W
 
 1. **Clone the repository:**
    ```sh
-   git clone https://github.com/yourusername/doomfire_wallpaper.git
-   cd doomfire_wallpaper/rust
+   git clone https://github.com/Leafmun-certii/arch_linux_doom_fire_wallpaper.git
+   cd arch_linux_doom_fire_wallpaper
    ```
 
-2. **Install dependencies:**
+2. **Install dependencies and build:**
    ```sh
    cargo build --release
    ```
@@ -48,21 +50,26 @@ This project generates a real-time animated fire effect, saves each frame as a W
    ```sh
    cargo run --release
    ```
+   Or run the binary directly from `target/release/doomfire_wallpaper`.
 
 ---
 
 ## Configuration
 
-Edit the following variables in [`src/main.rs`](src/main.rs) to change resolution, scale, and frame rate:
+Create or edit the config file at `~/.config/doomfire_wallpaper/config.toml`:
 
-```rust
-let screen_width = 1920;
-let screen_height = 1080;
-let scale = 6;  // Lower = more detailed fire, higher = faster
-let fps = 12;   // Frames per second
+```toml
+screen_width = 1920
+screen_height = 1080
+scale = 4
+fps = 23
+output = ""
+palette = "Original"    # Options: Original, Blue, Rainbow, Green, Purple, WhiteHot
+background = [0, 0, 0]  # Optional: RGB array, e.g. [20, 20, 20] for dark gray
+restart_on_pause = true # Optional: true (default) or false, controls if animation restarts after pause
 ```
 
-You can also set the `output` variable to target a specific monitor, or leave it empty to update all outputs.
+**All fields are optional**; defaults will be used if not set.
 
 ---
 
@@ -71,19 +78,21 @@ You can also set the `output` variable to target a specific monitor, or leave it
 - The program generates a new fire frame, saves it as a WebP image in `~/.cache/hyprpaper/doomfire.webp`.
 - It then tells Hyprpaper to reload the wallpaper using `hyprctl`.
 - This loop runs at your chosen FPS, creating a smooth animated effect.
+- When all monitors contain a client window or the system is dormant, the animation will be paused to save CPU utilization.
+- If `restart_on_pause` is set to `true`, the animation restarts from the beginning after a pause; if `false`, it resumes where it left off.
 
 ---
 
 ## Troubleshooting
 
 - **Wallpaper not updating?**  
-  Make sure Hyprpaper is running.
+  Make sure Hyprpaper is running and you have no other programs managing your wallpaper (e.g. [waypaper](https://github.com/anufrievroman/waypaper)).
 - **Performance issues?**  
   Increase the `scale` value or lower the resolution/FPS.
 - **Multiple monitors?**  
   Set the `output` variable to your desired monitor name (see `wlr-randr` or `hyprctl monitors`).
-- **Flickering animation**
-  Disable any system animations - hyprland for example
+- **Flickering animation?**  
+  Disable any system animations (see [Hyprland animation docs](https://wiki.hypr.land/Configuring/Animations/)).
 
 ---
 
@@ -98,8 +107,5 @@ You can also set the `output` variable to target a specific monitor, or leave it
 
 ## License
 
-WTFPL
-
----
-
+WTFPL  
 Enjoy your everliving flame
