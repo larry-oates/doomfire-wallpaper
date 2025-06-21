@@ -13,7 +13,7 @@ This project generates a real-time animated fire effect, saves each frame as a W
 - **Parallel rendering**: Uses all CPU cores for fast frame generation.
 - **WebP output**: Efficient, high-quality image format.
 - **Hyprpaper integration**: Automatically updates your wallpaper.
-- **Configurable via TOML file**: Resolution, speed, palette, background color, ect.
+- **Configurable via TOML file**: Resolution, speed, palette, background color, etc.
 - **Auto-pause**: Animation pauses when all screens are covered or system is sleeping.
 
 ---
@@ -36,21 +36,69 @@ This project generates a real-time animated fire effect, saves each frame as a W
    cd arch_linux_doom_fire_wallpaper
    ```
 
-2. **Install dependencies and build:**
+
+2. **(Recommended) Use the install script:**
    ```sh
-   cargo build --release
+   sh ./install.sh
+   ```
+   Do not run this as sudo!
+   This script will:
+   - Build the project
+   - Copy the binary to `~/.local/bin`
+   - Create an example config file at `~/.config/doomfire_wallpaper/config.toml` (if it doesn't exist)
+   - Install a systemd user service for autostart at `~/.config/systemd/user/doomfire_wallpaper.service`
+
+   After running the script, enable and start the service with:
+   ```sh
+   systemctl --user daemon-reload
+   systemctl --user enable --now doomfire_wallpaper.service
    ```
 
-3. **Run Hyprpaper** (if not already running):
+**Or run manually:**
    ```sh
    hyprpaper &
-   ```
-
-4. **Run the wallpaper generator:**
-   ```sh
    cargo run --release
    ```
    Or run the binary directly from `target/release/doomfire_wallpaper`.
+
+  3. **Enable hyprpaper**
+
+---
+
+## Enabling Hyprpaper
+
+Make sure Hyprpaper is enabled and running in your Hyprland session.  
+You can enable it as a systemd user service for automatic startup:
+
+```sh
+systemctl --user enable --now hyprpaper.service
+```
+
+Or, you can start it manually (for testing):
+
+```sh
+hyprpaper &
+```
+
+If you do not have a `hyprpaper.service` file, you can create one in `~/.config/systemd/user/hyprpaper.service`:
+
+```ini
+[Unit]
+Description=Hyprpaper wallpaper daemon
+
+[Service]
+ExecStart=hyprpaper
+
+[Install]
+WantedBy=default.target
+```
+
+Then reload systemd and enable:
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable --now hyprpaper.service
+```
 
 ---
 
