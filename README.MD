@@ -112,7 +112,7 @@ screen_height = 1080
 scale = 4
 fps = 23
 output = ""
-palette = "Original"    # Options: Original, Blue, Rainbow, Green, Purple, WhiteHot
+fire_type = "Original"    # Options: Original, Blue, Rainbow, Green, Purple, WhiteHot, Random
 background = [0, 0, 0]  # Optional: RGB array, e.g. [20, 20, 20] for dark gray
 restart_on_pause = true # Optional: true (default) or false, controls if animation restarts after pause
 ```

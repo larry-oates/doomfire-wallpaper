@@ -1,5 +1,8 @@
 use crate::perlin::perlin_noise_1d;
 use rand::Rng;
+use serde::Deserialize;
+use strum_macros::EnumIter;
+use strum::IntoEnumIterator;
 
 pub struct DoomFire {
     pub width: usize,
@@ -11,12 +14,23 @@ pub struct DoomFire {
 }
 
 impl DoomFire {
-    pub fn new(
-        width: usize,
-        height: usize,
-        fire_type: FireType,
-        background_colour: Option<[u8; 3]>,
-    ) -> Self {
+    pub fn new(config: &Config) -> Self {
+        let width = config.screen_width.unwrap_or(1920) / config.scale.unwrap_or(1);
+        let height = config.screen_height.unwrap_or(1080) / config.scale.unwrap_or(1);
+        let fire_type = match config.fire_type.as_deref() {
+            Some("Blue") => FireType::Blue,
+            Some("Rainbow") => FireType::Rainbow,
+            Some("Green") => FireType::Green,
+            Some("Purple") => FireType::Purple,
+            Some("WhiteHot") => FireType::WhiteHot,
+            Some("Random") => {
+                let variants: Vec<FireType> = FireType::iter().collect();
+                let idx = rand::random::<usize>() % variants.len();
+                variants[idx]
+            }
+            _ => FireType::Original,
+        };
+        let background_colour = config.background;
         let size = width * height;
         let pixel_buffer = vec![0; size];
         let palette = generate_palette(fire_type, background_colour);
@@ -56,6 +70,7 @@ impl DoomFire {
             }
         }
     }
+
     pub fn initialize_fire(&mut self) {
         for v in &mut self.pixel_buffer {
             *v = 0;
@@ -63,20 +78,18 @@ impl DoomFire {
         for x in 0..self.width {
             if self.fire_type == FireType::Rainbow {
                 // For rainbow palette, we want to start with a random color
-                let rand: usize = rand::thread_rng().gen_range(self.palette.len()/2..self.palette.len());
+                let rand: usize = rand::thread_rng().gen_range(self.palette.len() / 2..self.palette.len());
                 self.pixel_buffer[(self.height - 1) * self.width + x] = rand as u8;
             } else {
                 // For other palettes, we start with the last color in the palette
                 self.pixel_buffer[(self.height - 1) * self.width + x] = (self.palette.len() - 1) as u8;
             }
-
         }
     }
 }
 
-
 #[allow(dead_code)]
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, EnumIter)]
 pub enum FireType {
     Original,
     Blue,
@@ -146,4 +159,43 @@ fn generate_palette(palette: FireType, background_colour: Option<[u8; 3]>) -> Ve
     }
 
     pal
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Config {
+    pub screen_width: Option<usize>,
+    pub screen_height: Option<usize>,
+    pub scale: Option<usize>,
+    pub fps: Option<u32>,
+    pub output: Option<String>,
+    pub fire_type: Option<String>,
+    pub background: Option<[u8; 3]>,
+    pub restart_on_pause: Option<bool>,
+}
+
+impl Config {
+    pub fn load() -> Self {
+        let config_path = dirs::home_dir()
+            .expect("Could not find home directory")
+            .join(".config/doom-fire-wallpaper/config.toml");
+        let config_str = std::fs::read_to_string(config_path).unwrap_or_default();
+        let config: Self = toml::from_str(&config_str).unwrap_or_default();
+        println!("Loaded {:?}", config);
+        config
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            screen_width: Some(1920),
+            screen_height: Some(1080),
+            scale: Some(4),
+            fps: Some(23),
+            output: Some(String::new()),
+            fire_type: Some("Original".to_string()),
+            background: None,
+            restart_on_pause: Some(true),
+        }
+    }
 }

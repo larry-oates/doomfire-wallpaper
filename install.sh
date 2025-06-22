@@ -22,7 +22,7 @@ screen_width = 1920
 screen_height = 1080
 scale = 4
 fps = 23
-palette = "Original"
+fire_type = "Original"
 background = [0, 0, 0]
 restart_on_pause = true
 EOF
