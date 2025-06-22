@@ -22,6 +22,7 @@ fn main() -> anyhow::Result<()> {
     let wallpaper_path = cache_dir.join("doomfire.webp");
     let mut restart_flag = false;
     let restart_on_pause = config.restart_on_pause.unwrap_or(true); 
+
     let fps = config.fps.unwrap_or(30); 
     let output = config.output.clone().unwrap_or_else(|| "".to_string());
 

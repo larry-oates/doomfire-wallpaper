@@ -112,12 +112,32 @@ screen_height = 1080
 scale = 4
 fps = 23
 output = ""
-fire_type = "Original"    # Options: Original, Blue, Rainbow, Green, Purple, WhiteHot, Random
+fire_type = "Original"    # See fire type section for options
 background = [0, 0, 0]  # Optional: RGB array, e.g. [20, 20, 20] for dark gray
-restart_on_pause = true # Optional: true (default) or false, controls if animation restarts after pause
+restart_on_pause = true # Optional: true (default) or false, controls if animation restarts after pause. 
+random_on_pause = false # Optional: false (default) or true, selects random fire type restart after pause if fire type is "Random"
 ```
 
 **All fields are optional**; defaults will be used if not set.
+
+## Fire Types
+
+- **Original:** Classic DOOM fire
+- **Blue:** Blue flame
+- **Rainbow:** Animated rainbow
+- **Green:** Toxic green
+- **Purple:** Purple flame
+- **WhiteHot:** White-hot fire
+- **Ice:** Cold blue/white
+- **Toxic:** Neon green/yellow
+- **FireAndIce:** Cold blue ice blending into bright, deep red fire
+- **ChemicalFire:** Fire at the chemical plant
+- **Cyberpunk:** Neon magenta/cyan
+- **Aurora:** Animated Northern lights effect
+- **Plasma:** Electric blue/purple/white bolts, fading to black
+- **Void:** Deep blue/black cosmic
+- **Candy:** Pastel rainbow stripes
+- **Random:** Randomly selects a fire type on startup
 
 ---
 
@@ -156,4 +176,4 @@ restart_on_pause = true # Optional: true (default) or false, controls if animati
 ## License
 
 WTFPL  
-Enjoy your everliving flame
+Enjoy your everliving flame!

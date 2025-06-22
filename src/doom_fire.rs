@@ -23,9 +23,19 @@ impl DoomFire {
             Some("Green") => FireType::Green,
             Some("Purple") => FireType::Purple,
             Some("WhiteHot") => FireType::WhiteHot,
+            Some("Ice") => FireType::Ice,
+            Some("Toxic") => FireType::Toxic,
+            Some("FireAndIce") => FireType::FireAndIce, 
+            Some("ChemicalFire") => FireType::ChemicalFire,
+            Some("Cyberpunk") => FireType::Cyberpunk,
+            Some("Aurora") => FireType::Aurora,
+            Some("Plasma") => FireType::Plasma,
+            Some("Void") => FireType::Void,
+            Some("Candy") => FireType::Candy,
             Some("Random") => {
                 let variants: Vec<FireType> = FireType::iter().collect();
                 let idx = rand::random::<usize>() % variants.len();
+                println!("Random fire type selected: {:?}", variants[idx]);
                 variants[idx]
             }
             _ => FireType::Original,
@@ -33,7 +43,7 @@ impl DoomFire {
         let background_colour = config.background;
         let size = width * height;
         let pixel_buffer = vec![0; size];
-        let palette = generate_palette(fire_type, background_colour);
+        let palette = generate_palette(fire_type, background_colour, 0.0);
 
         let mut doom_fire = Self {
             width,
@@ -69,15 +79,37 @@ impl DoomFire {
                 }
             }
         }
+
+        // Animate Aurora palette by mutating it each frame
+        if self.fire_type == FireType::Aurora {
+            self.palette = generate_palette(self.fire_type, None, self.t as f32);
+        }
     }
 
     pub fn initialize_fire(&mut self) {
-        for v in &mut self.pixel_buffer {
-            *v = 0;
+        // Clear the pixel buffer
+        self.pixel_buffer.iter_mut().for_each(|x| *x = 0);
+
+        // Draw fire type name as an overlay in the fire buffer
+        let name = format!("{:?}", self.fire_type);
+        let chars: Vec<char> = name.chars().collect();
+        let text_width = chars.len();
+        let y = self.height.saturating_sub(4); // 4 rows from the bottom
+        let x_offset = (self.width.saturating_sub(text_width)) / 2;
+
+        for (i, c) in chars.iter().enumerate() {
+            if *c != ' ' {
+                let idx = y * self.width + x_offset + i;
+                if idx < self.pixel_buffer.len() {
+                    // Use a mid-high palette value for visibility
+                    self.pixel_buffer[idx] = (self.palette.len() as u8 * 3 / 4).max(1);
+                }
+            }
         }
+
+        // Initialize the bottom row as usual
         for x in 0..self.width {
-            if self.fire_type == FireType::Rainbow {
-                // For rainbow palette, we want to start with a random color
+            if self.fire_type == FireType::Candy {
                 let rand: usize = rand::thread_rng().gen_range(self.palette.len() / 2..self.palette.len());
                 self.pixel_buffer[(self.height - 1) * self.width + x] = rand as u8;
             } else {
@@ -89,7 +121,7 @@ impl DoomFire {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Copy, PartialEq, EnumIter)]
+#[derive(Clone, Copy, PartialEq, EnumIter, Debug)]
 pub enum FireType {
     Original,
     Blue,
@@ -97,10 +129,42 @@ pub enum FireType {
     Green,
     Purple,
     WhiteHot,
+    Ice,
+    Toxic,
+    FireAndIce,
+    ChemicalFire,
+    Cyberpunk,
+    Aurora,
+    Plasma,
+    Void,
+    Candy,
 }
 
-fn generate_palette(palette: FireType, background_colour: Option<[u8; 3]>) -> Vec<[u8; 3]> {
-    let mut pal = match palette {
+fn generate_palette(fire_type: FireType, background_colour: Option<[u8; 3]>, phase: f32) -> Vec<[u8; 3]> {
+    let mut pal = match fire_type {
+        FireType::FireAndIce => (0..=36)
+        .map(|i| {
+            let t = i as f32 / 36.0;
+            // Make the fire less purple: reduce blue and green in the fire region, keep blue strong in ice
+            let r = (255.0 * t.powf(1.2) + 60.0 * t).min(255.0) as u8; // Brighter, deeper red
+            let g = (80.0 * t + 60.0 * (1.0 - t)).min(140.0) as u8;    // Lower green in fire region
+            let b = (255.0 * (1.0 - t) + 20.0 * t).min(255.0) as u8;   // Lower blue in fire region
+            [r, g, b]
+        })
+        .collect(),
+        FireType::ChemicalFire => (0..=36)
+            .map(|i| {
+                let t = i as f32 / 36.0;
+                // True ChemicalFire: deep purple, magenta, orange, yellow
+                let r = (255.0 * t).min(255.0) as u8;
+                let g = (80.0 * (1.0 - t) + 120.0 * t).min(200.0) as u8;
+                let b = (180.0 * (1.0 - t).powi(2)).min(180.0) as u8;
+                // Add magenta/purple at the low end
+                let r = if t < 0.3 { (180.0 + 75.0 * t / 0.3) as u8 } else { r };
+                let b = if t < 0.3 { (120.0 + 135.0 * (0.3 - t) / 0.3) as u8 } else { b };
+                [r, g, b]
+            })
+            .collect(),
         FireType::Original => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;
@@ -117,7 +181,7 @@ fn generate_palette(palette: FireType, background_colour: Option<[u8; 3]>) -> Ve
                 [0, g, b]
             })
             .collect::<Vec<[u8; 3]>>(),
-        FireType::Rainbow => (0..=36)
+        FireType::Candy => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;
                 let r = (255.0 * (0.5 + 0.5 * (t * 3.0).sin())).min(255.0) as u8;
@@ -149,6 +213,83 @@ fn generate_palette(palette: FireType, background_colour: Option<[u8; 3]>) -> Ve
                 [v, v, v]
             })
             .collect::<Vec<[u8; 3]>>(),
+        FireType::Ice => (0..=36)
+            .map(|i| {
+                let t = i as f32 / 36.0;
+                let b = (200.0 + 55.0 * t).min(255.0) as u8;
+                let g = (220.0 * t.powi(2)).min(220.0) as u8;
+                let r = (180.0 * t.powi(3)).min(180.0) as u8;
+                [r, g, b]
+            })
+            .collect(),
+        FireType::Toxic => (0..=36)
+            .map(|i| {
+                let t = i as f32 / 36.0;
+                let g = (255.0 * t.sqrt()).min(255.0) as u8;
+                let r = (128.0 * t.powi(2)).min(128.0) as u8;
+                let b = (64.0 * (1.0 - t)).max(0.0) as u8;
+                [r, g, b]
+            })
+            .collect(),
+        FireType::Cyberpunk => (0..=36)
+            .map(|i| {
+                let t = i as f32 / 36.0;
+                let r = (255.0 * (0.5 + 0.5 * (t * 2.0).sin())).min(255.0) as u8;
+                let g = (0.0) as u8;
+                let b = (255.0 * (0.5 + 0.5 * (t * 2.0 + 2.0).sin())).min(255.0) as u8;
+                [r, g, b]
+            })
+            .collect(),
+        FireType::Aurora => {
+            // Animated/mutating palette: shift hues over time using phase
+            let phase = phase;
+            (0..=36)
+                .map(|i| {
+                    let t = i as f32 / 36.0;
+                    let r = (60.0 * (0.5 + 0.5 * ((t * 6.0 + 1.0 + phase).sin()))).max(0.0) as u8;
+                    let g = (180.0 * (0.5 + 0.5 * ((t * 2.5 + 2.0 + phase * 0.7).sin())) + 60.0).min(255.0) as u8;
+                    let b = (200.0 * (0.5 + 0.5 * ((t * 3.5 + 4.0 + phase * 1.3).cos()))).min(255.0) as u8;
+                    [r, g, b]
+                })
+                .collect()
+        },
+        FireType::Plasma => (0..=36)
+            .map(|i| {
+                let t = i as f32 / 36.0;
+                if t < 0.08 {
+                    [0, 0, 0]
+                } else {
+                    // Add more white patches by boosting all channels at certain intervals
+                    let plasma_white = ((t * 8.0).sin().abs() > 0.85) || ((t * 4.0).cos().abs() > 0.95);
+                    if plasma_white {
+                        [255, 255, 255]
+                    } else {
+                        let r = (180.0 * (0.5 + 0.5 * (t * 6.0).sin())).min(255.0) as u8;
+                        let g = (80.0 * (0.5 + 0.5 * (t * 4.0 + 1.0).cos())).min(255.0) as u8;
+                        let b = (200.0 + 55.0 * (0.5 + 0.5 * (t * 8.0).sin())).min(255.0) as u8;
+                        [r, g, b]
+                    }
+                }
+            })
+            .collect(),
+        FireType::Void => (0..=36)
+            .map(|i| {
+                let t = i as f32 / 36.0;
+                let r = (10.0 * (1.0 - t)).max(0.0) as u8;
+                let g = (10.0 * (1.0 - t)).max(0.0) as u8;
+                let b = (40.0 + 80.0 * t.powi(2)).min(120.0) as u8;
+                [r, g, b]
+            })
+            .collect(),
+        FireType::Rainbow => (0..=36)
+            .map(|i| {
+                let t = i as f32 / 36.0;
+                let r = (200.0 * (0.5 + 0.5 * (t * 8.0).sin()) + 55.0).min(255.0) as u8;
+                let g = (200.0 * (0.5 + 0.5 * (t * 8.0 + 2.0).sin()) + 55.0).min(255.0) as u8;
+                let b = (200.0 * (0.5 + 0.5 * (t * 8.0 + 4.0).sin()) + 55.0).min(255.0) as u8;
+                [r, g, b]
+            })
+            .collect(),
     };
 
     // Set the first entry to the background color if provided
