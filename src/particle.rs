@@ -25,6 +25,10 @@ pub fn maybe_spawn_particle<R: Rng + ?Sized>(
                 (palette_len - 1) as u8,
                 rng.gen_range(10..30),
             ),
+            FireType::White => (
+                (palette_len - 1) as u8,
+                rng.gen_range(10..30),
+            ),
             FireType::Blue | FireType::Ice => (
                 (palette_len as f32 * 0.7) as u8,
                 rng.gen_range(14..32),

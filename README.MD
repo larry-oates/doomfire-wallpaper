@@ -132,14 +132,15 @@ systemctl --user restart doom-fire-wallpaper.service
 ### Fire Types
 
 - **Original:** Classic DOOM fire
+- **WhiteHot:** Classic DOOM palette, but blends to white at the top (hotter white flames)
+- **White:** White-hot fire (all shades of white)
 - **Blue:** Blue flame
 - **Rainbow:** Animated rainbow
 - **Green:** Toxic green
 - **Purple:** Purple flame
-- **WhiteHot:** White-hot fire
 - **Ice:** Cold blue/white
 - **Toxic:** Neon green/yellow
-- **FireAndIce:** Cold blue ice blending into bright, deep red fire
+- **FireAndIce:** Cold blue ice blending into hot fire
 - **ChemicalFire:** Fire at the chemical plant
 - **Cyberpunk:** Neon magenta/cyan
 - **Aurora:** Animated Northern lights effect

@@ -25,6 +25,7 @@ impl DoomFire {
             Some("Green") => FireType::Green,
             Some("Purple") => FireType::Purple,
             Some("WhiteHot") => FireType::WhiteHot,
+            Some("White") => FireType::White,
             Some("Ice") => FireType::Ice,
             Some("Toxic") => FireType::Toxic,
             Some("FireAndIce") => FireType::FireAndIce, 

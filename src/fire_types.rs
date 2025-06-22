@@ -8,7 +8,8 @@ pub enum FireType {
     Rainbow,
     Green,
     Purple,
-    WhiteHot,
+    White,         
+    WhiteHot,      
     Ice,
     Toxic,
     FireAndIce,
@@ -50,6 +51,26 @@ pub fn generate_palette(fire_type: FireType, background_colour: Option<[u8; 3]>,
                 [r, g, 0]
             })
             .collect::<Vec<[u8; 3]>>(),
+        FireType::WhiteHot => (0..=36)
+            .map(|i| {
+                let t = i as f32 / 36.0;
+                // Like Original, but ends at white
+                let r = (255.0 * t.sqrt()).min(255.0) as u8;
+                let g = (255.0 * t.powi(3)).min(255.0) as u8;
+                let blend = t; // 0 at bottom, 1 at top
+                let r = ((1.0 - blend) * r as f32 + blend * 255.0) as u8;
+                let g = ((1.0 - blend) * g as f32 + blend * 255.0) as u8;
+                let b = (blend * 255.0) as u8;
+                [r, g, b]
+            })
+            .collect::<Vec<[u8; 3]>>(),
+        FireType::White => (0..=36)
+            .map(|i| {
+                let t = i as f32 / 36.0;
+                let v = (255.0 * t.sqrt()).min(255.0) as u8;
+                [v, v, v]
+            })
+            .collect::<Vec<[u8; 3]>>(),
         FireType::Blue => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;
@@ -81,13 +102,6 @@ pub fn generate_palette(fire_type: FireType, background_colour: Option<[u8; 3]>,
                 let r = (128.0 * t.sqrt()).min(128.0) as u8;
                 let b = (255.0 * t.powi(2)).min(255.0) as u8;
                 [r, 0, b]
-            })
-            .collect::<Vec<[u8; 3]>>(),
-        FireType::WhiteHot => (0..=36)
-            .map(|i| {
-                let t = i as f32 / 36.0;
-                let v = (255.0 * t.sqrt()).min(255.0) as u8;
-                [v, v, v]
             })
             .collect::<Vec<[u8; 3]>>(),
         FireType::Ice => (0..=36)
