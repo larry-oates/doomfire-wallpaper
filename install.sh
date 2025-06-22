@@ -42,6 +42,7 @@ Type=simple
 ExecStartPre=/bin/sh -c 'until pgrep hyprpaper; do sleep 1; done'
 ExecStart=%h/.local/bin/doom-fire-wallpaper
 Restart=on-failure
+Nice=10
 
 [Install]
 WantedBy=default.target
