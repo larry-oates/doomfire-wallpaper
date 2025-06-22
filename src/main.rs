@@ -56,12 +56,12 @@ fn main() -> anyhow::Result<()> {
     let output = config.output.unwrap_or_else(String::new);
 
     let palette = match config.palette.as_deref() {
-        Some("Blue") => doom_fire::FirePalette::Blue,
-        Some("Rainbow") => doom_fire::FirePalette::Rainbow,
-        Some("Green") => doom_fire::FirePalette::Green,
-        Some("Purple") => doom_fire::FirePalette::Purple,
-        Some("WhiteHot") => doom_fire::FirePalette::WhiteHot,
-        _ => doom_fire::FirePalette::Original,
+        Some("Blue") => doom_fire::FireType::Blue,
+        Some("Rainbow") => doom_fire::FireType::Rainbow,
+        Some("Green") => doom_fire::FireType::Green,
+        Some("Purple") => doom_fire::FireType::Purple,
+        Some("WhiteHot") => doom_fire::FireType::WhiteHot,
+        _ => doom_fire::FireType::Original,
     };
 
     let mut fire = DoomFire::new(

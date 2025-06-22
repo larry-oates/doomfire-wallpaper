@@ -6,6 +6,7 @@ pub struct DoomFire {
     pub height: usize,
     pub pixel_buffer: Vec<u8>,
     pub palette: Vec<[u8; 3]>,
+    pub fire_type: FireType,
     t: f64,
 }
 
@@ -13,18 +14,19 @@ impl DoomFire {
     pub fn new(
         width: usize,
         height: usize,
-        palette_type: FirePalette,
+        fire_type: FireType,
         background_colour: Option<[u8; 3]>,
     ) -> Self {
         let size = width * height;
         let pixel_buffer = vec![0; size];
-        let palette = generate_palette(palette_type, background_colour);
+        let palette = generate_palette(fire_type, background_colour);
 
         let mut doom_fire = Self {
             width,
             height,
             pixel_buffer,
             palette,
+            fire_type,
             t: 0.0,
         };
         doom_fire.initialize_fire();
@@ -55,17 +57,27 @@ impl DoomFire {
         }
     }
     pub fn initialize_fire(&mut self) {
-        self.pixel_buffer.fill(0);
+        for v in &mut self.pixel_buffer {
+            *v = 0;
+        }
         for x in 0..self.width {
-            self.pixel_buffer[(self.height - 1) * self.width + x] = (self.palette.len() - 1) as u8;
+            if self.fire_type == FireType::Rainbow {
+                // For rainbow palette, we want to start with a random color
+                let rand: usize = rand::thread_rng().gen_range(self.palette.len()/2..self.palette.len());
+                self.pixel_buffer[(self.height - 1) * self.width + x] = rand as u8;
+            } else {
+                // For other palettes, we start with the last color in the palette
+                self.pixel_buffer[(self.height - 1) * self.width + x] = (self.palette.len() - 1) as u8;
+            }
+
         }
     }
 }
 
 
 #[allow(dead_code)]
-#[derive(Clone, Copy)]
-pub enum FirePalette {
+#[derive(Clone, Copy, PartialEq)]
+pub enum FireType {
     Original,
     Blue,
     Rainbow,
@@ -74,9 +86,9 @@ pub enum FirePalette {
     WhiteHot,
 }
 
-fn generate_palette(palette: FirePalette, background_colour: Option<[u8; 3]>) -> Vec<[u8; 3]> {
+fn generate_palette(palette: FireType, background_colour: Option<[u8; 3]>) -> Vec<[u8; 3]> {
     let mut pal = match palette {
-        FirePalette::Original => (0..=36)
+        FireType::Original => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;
                 let r = (255.0 * t.sqrt()).min(255.0) as u8;
@@ -84,7 +96,7 @@ fn generate_palette(palette: FirePalette, background_colour: Option<[u8; 3]>) ->
                 [r, g, 0]
             })
             .collect::<Vec<[u8; 3]>>(),
-        FirePalette::Blue => (0..=36)
+        FireType::Blue => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;
                 let b = (255.0 * t.sqrt()).min(255.0) as u8;
@@ -92,7 +104,7 @@ fn generate_palette(palette: FirePalette, background_colour: Option<[u8; 3]>) ->
                 [0, g, b]
             })
             .collect::<Vec<[u8; 3]>>(),
-        FirePalette::Rainbow => (0..=36)
+        FireType::Rainbow => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;
                 let r = (255.0 * (0.5 + 0.5 * (t * 3.0).sin())).min(255.0) as u8;
@@ -101,7 +113,7 @@ fn generate_palette(palette: FirePalette, background_colour: Option<[u8; 3]>) ->
                 [r, g, b]
             })
             .collect::<Vec<[u8; 3]>>(),
-        FirePalette::Green => (0..=36)
+        FireType::Green => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;
                 let g = (255.0 * t.sqrt()).min(255.0) as u8;
@@ -109,7 +121,7 @@ fn generate_palette(palette: FirePalette, background_colour: Option<[u8; 3]>) ->
                 [0, g, b]
             })
             .collect::<Vec<[u8; 3]>>(),
-        FirePalette::Purple => (0..=36)
+        FireType::Purple => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;
                 let r = (128.0 * t.sqrt()).min(128.0) as u8;
@@ -117,7 +129,7 @@ fn generate_palette(palette: FirePalette, background_colour: Option<[u8; 3]>) ->
                 [r, 0, b]
             })
             .collect::<Vec<[u8; 3]>>(),
-        FirePalette::WhiteHot => (0..=36)
+        FireType::WhiteHot => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;
                 let v = (255.0 * t.sqrt()).min(255.0) as u8;
