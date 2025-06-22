@@ -31,16 +31,18 @@ This project generates a real-time animated fire effect, saves each frame as a W
 ## Installation
 
 1. **Clone the repository:**
+
    ```sh
    git clone https://github.com/Leafmun-certii/doom_fire_wallpaper.git
    cd doom_fire_wallpaper
    ```
 
-
 2. **(Recommended) Use the install script:**
+
    ```sh
    sh ./install.sh
    ```
+
    Do not run this as sudo!
    This script will:
    - Build the project
@@ -49,56 +51,55 @@ This project generates a real-time animated fire effect, saves each frame as a W
    - Install a systemd user service for autostart at `~/.config/systemd/user/doom-fire-wallpaper.service`
 
    After running the script, enable and start the service with:
+
    ```sh
    systemctl --user daemon-reload
    systemctl --user enable --now doom-fire-wallpaper.service
    ```
+  
+   **Or run manually:**
 
-**Or run manually:**
    ```sh
    hyprpaper &
    cargo run --release
    ```
+
    Or run the binary directly from `target/release/doom-fire-wallpaper`.
 
-  3. **Enable hyprpaper**
+3. **Enable hyprpaper**
 
----
+  **Make sure Hyprpaper is enabled and running in your Hyprland session.**  
+  You can enable it as a systemd user service for automatic startup:
 
-## Enabling Hyprpaper
+  ```sh
+  systemctl --user enable --now hyprpaper.service
+  ```
 
-Make sure Hyprpaper is enabled and running in your Hyprland session.  
-You can enable it as a systemd user service for automatic startup:
+  Or, you can start it manually (for testing):
 
-```sh
-systemctl --user enable --now hyprpaper.service
-```
+  ```sh
+  hyprpaper &
+  ```
 
-Or, you can start it manually (for testing):
+  If you do not have a `hyprpaper.service` file, you can create one in `~/.config/systemd/user/hyprpaper.service`:
 
-```sh
-hyprpaper &
-```
+  ```ini
+  [Unit]
+  Description=Hyprpaper wallpaper daemon
 
-If you do not have a `hyprpaper.service` file, you can create one in `~/.config/systemd/user/hyprpaper.service`:
+  [Service]
+  ExecStart=hyprpaper
 
-```ini
-[Unit]
-Description=Hyprpaper wallpaper daemon
+  [Install]
+  WantedBy=default.target
+  ```
 
-[Service]
-ExecStart=hyprpaper
+  Then reload systemd and enable:
 
-[Install]
-WantedBy=default.target
-```
-
-Then reload systemd and enable:
-
-```sh
-systemctl --user daemon-reload
-systemctl --user enable --now hyprpaper.service
-```
+  ```sh
+  systemctl --user daemon-reload
+  systemctl --user enable --now hyprpaper.service
+  ```
 
 ---
 
@@ -120,7 +121,15 @@ random_on_pause = false # Optional: false (default) or true, selects random fire
 
 **All fields are optional**; defaults will be used if not set.
 
-## Fire Types
+### Applying Config Changes
+
+After you change the configuration (either by editing `~/.config/doom-fire-wallpaper/config.toml` manually or using the CLI), **you must restart the wallpaper service for changes to take effect**:
+
+```sh
+systemctl --user restart doom-fire-wallpaper.service
+```
+
+### Fire Types
 
 - **Original:** Classic DOOM fire
 - **Blue:** Blue flame
@@ -177,3 +186,4 @@ random_on_pause = false # Optional: false (default) or true, selects random fire
 
 WTFPL  
 Enjoy your everliving flame!
+
