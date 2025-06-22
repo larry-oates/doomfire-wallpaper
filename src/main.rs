@@ -3,7 +3,12 @@ mod perlin;
 mod render;
 mod wallpaper;
 
-use crate::doom_fire::{Config, DoomFire};
+pub mod config;
+pub mod fire_types;
+pub mod particle;
+
+use crate::config::Config;
+use crate::doom_fire::DoomFire;
 use crate::render::render_fire_frame_to_image;
 use crate::wallpaper::{is_all_screens_covered, is_system_sleeping, load_wallpaper};
 use std::{fs, time::Instant};
@@ -18,11 +23,9 @@ fn main() -> anyhow::Result<()> {
         .expect("Could not find home directory")
         .join(".cache/hyprpaper");
     fs::create_dir_all(&cache_dir)?;
-
     let wallpaper_path = cache_dir.join("doomfire.webp");
     let mut restart_flag = false;
     let restart_on_pause = config.restart_on_pause.unwrap_or(true); 
-
     let fps = config.fps.unwrap_or(30); 
     let output = config.output.clone().unwrap_or_else(|| "".to_string());
 
