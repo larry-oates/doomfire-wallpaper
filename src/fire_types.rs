@@ -26,9 +26,10 @@ pub fn generate_palette(fire_type: FireType, background_colour: Option<[u8; 3]>,
         FireType::FireAndIce => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;
-                let r = (255.0 * t.powf(1.2) + 60.0 * t).min(255.0) as u8;
-                let g = (80.0 * t + 60.0 * (1.0 - t)).min(140.0) as u8;
-                let b = (255.0 * (1.0 - t) + 20.0 * t).min(255.0) as u8;
+                // Start with icy white (bluish white), blend to fire red
+                let r = (255.0 * t.powf(1.2) + 120.0 * (1.0 - t)).min(255.0) as u8;
+                let g = (180.0 * (1.0 - t) + 80.0 * t).min(200.0) as u8;
+                let b = (255.0 * (1.0 - t) + 40.0 * t).min(255.0) as u8;
                 [r, g, b]
             })
             .collect(),

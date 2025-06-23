@@ -115,7 +115,8 @@ fps = 23
 output = ""
 fire_type = "Original"    # See fire type section for options
 background = [0, 0, 0]  # Optional: RGB array, e.g. [20, 20, 20] for dark gray
-restart_on_pause = true # Optional: true (default) or false, controls if animation restarts after pause. 
+restart_on_pause = true # Optional: true (default) or false, controls if animation restarts after pause.
+pause_on_cover = true   # Optional: true (default) pauses animation when all screens contain a window; set to false to keep animating even when covered
 random_on_pause = false # Optional: false (default) or true, selects random fire type restart after pause if fire type is "Random"
 ```
 

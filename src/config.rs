@@ -10,6 +10,7 @@ pub struct Config {
     pub fire_type: Option<String>,
     pub background: Option<[u8; 3]>,
     pub restart_on_pause: Option<bool>,
+    pub pause_on_cover: Option<bool>,
 }
 
 impl Config {
@@ -35,6 +36,7 @@ impl Default for Config {
             fire_type: Some("Original".to_string()),
             background: None,
             restart_on_pause: Some(true),
+            pause_on_cover: Some(true), // NEW
         }
     }
 }

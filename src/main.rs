@@ -28,12 +28,13 @@ fn main() -> anyhow::Result<()> {
     let restart_on_pause = config.restart_on_pause.unwrap_or(true); 
     let fps = config.fps.unwrap_or(30); 
     let output = config.output.clone().unwrap_or_else(|| "".to_string());
+    let pause_on_cover = config.pause_on_cover.unwrap_or(true);
 
     loop {
         let covered = is_all_screens_covered();
         let sleeping = is_system_sleeping();
 
-        if covered || sleeping {
+        if pause_on_cover && (covered || sleeping) {
             std::thread::sleep(std::time::Duration::from_millis(10));
             if restart_on_pause && !restart_flag {
                 restart_flag = true;
