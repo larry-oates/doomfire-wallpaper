@@ -20,8 +20,18 @@ impl Config {
             .join(".config/doom-fire-wallpaper/config.toml");
         let config_str = std::fs::read_to_string(config_path).unwrap_or_default();
         let config: Self = toml::from_str(&config_str).unwrap_or_default();
-        println!("Loaded {:?}", config);
-        config
+        let default = Config::default();
+        Config {
+            screen_width: config.screen_width.or(default.screen_width),
+            screen_height: config.screen_height.or(default.screen_height),
+            scale: config.scale.or(default.scale),
+            fps: config.fps.or(default.fps),
+            output: config.output.or(default.output),
+            fire_type: config.fire_type.or(default.fire_type),
+            background: config.background.or(default.background),
+            restart_on_pause: config.restart_on_pause.or(default.restart_on_pause),
+            pause_on_cover: config.pause_on_cover.or(default.pause_on_cover),
+        }
     }
 }
 
@@ -36,7 +46,7 @@ impl Default for Config {
             fire_type: Some("Original".to_string()),
             background: None,
             restart_on_pause: Some(true),
-            pause_on_cover: Some(true), // NEW
+            pause_on_cover: Some(true),
         }
     }
 }

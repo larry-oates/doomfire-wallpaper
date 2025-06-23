@@ -16,7 +16,7 @@ use std::{fs, time::Instant};
 
 fn main() -> anyhow::Result<()> {
     let config = Config::load();
-
+    println!("Using config: {:?}", config);
     let mut fire = DoomFire::new(&config);
 
     let cache_dir = dirs::home_dir()
@@ -35,10 +35,12 @@ fn main() -> anyhow::Result<()> {
         let sleeping = is_system_sleeping();
 
         if pause_on_cover && (covered || sleeping) {
+            // Fill the pixel buffer with the background color index (usually 0)
             std::thread::sleep(std::time::Duration::from_millis(10));
             if restart_on_pause && !restart_flag {
                 restart_flag = true;
-                fire.initialize_fire();
+                let bg_idx = 0u8;
+                fire.pixel_buffer.iter_mut().for_each(|x| *x = bg_idx);
                 let img = render_fire_frame_to_image(&fire)?;
                 let mut file = std::fs::File::create(&wallpaper_path)?;
                 img.write_to(&mut file, image::ImageFormat::WebP)?;
@@ -47,6 +49,7 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         if restart_flag {
+           fire.initialize_fire();
            restart_flag = false;
         }
 
