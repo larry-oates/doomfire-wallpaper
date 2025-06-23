@@ -1,4 +1,4 @@
-# DOOM fire Wallpaper for hyprpaper
+# DOOM-style fire wallpaper for Hyprpaper
 
 Animated [Doom fire effect](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper for [Hyprpaper](https://github.com/hyprwm/hyprpaper) on Linux built with Rust.
 
@@ -9,22 +9,18 @@ This project generates a real-time animated fire effect, saves each frame as a W
 ## Features
 
 - **Real-time animated fire**: Classic DOOM-style fire simulation.
-- **Multiple color palettes**: Original, blue, rainbow, green, purple, white-hot... add your own!
+- **Multiple colour palettes**: Original, blue, rainbow, toxic, purple, white-hot... add your own!
 - **Parallel rendering**: Uses all CPU cores for fast frame generation.
-- **WebP output**: Efficient, high-quality image format.
-- **Hyprpaper integration**: Automatically updates your wallpaper.
-- **Configurable via TOML file**: Resolution, speed, palette, background color, etc.
-- **Auto-pause**: Animation pauses when all screens are covered or system is sleeping.
+- **Configurable via TOML file**: Resolution, speed, palette, background colour, etc.
+- **Auto-pause**: The animation pauses when all screens (outputs) have a window (client) on them or your system is asleep to save CPU.
 
 ---
 
 ## Requirements
 
 - **Linux** (Wayland, with Hyprland and Hyprpaper)
-- [Rust](https://rust-lang.org/) (edition 2021)
-- [Hyprpaper](https://github.com/hyprwm/hyprpaper) running and configured
-- [WebP support in the `image` crate](https://crates.io/crates/image) (enabled by default)
-- [rayon](https://crates.io/crates/rayon) for parallel rendering
+- [Rust/cargo](https://rust-lang.org/) (edition 2021)
+- [Hyprpaper](https://github.com/hyprwm/hyprpaper) - running and configured
 
 ---
 
@@ -43,63 +39,66 @@ This project generates a real-time animated fire effect, saves each frame as a W
    sh ./install.sh
    ```
 
-   Do not run this as sudo!
+   Do not run this as sudo!  
    This script will:
    - Build the project
    - Copy the binary to `~/.local/bin`
    - Create an example config file at `~/.config/doom-fire-wallpaper/config.toml` (if it doesn't exist)
    - Install a systemd user service for autostart at `~/.config/systemd/user/doom-fire-wallpaper.service`
 
-   After running the script, enable and start the service with:
+   ```
+
+3. **Enable hyprpaper**
+
+   **Make sure Hyprpaper is enabled and running in your Hyprland session.**  
+   You can enable it as a systemd user service for automatic startup:
+
+   ```sh
+   systemctl --user enable --now hyprpaper.service
+   ```
+
+   Or, you can start it manually (for testing):
+
+   ```sh
+   hyprpaper &
+   ```
+
+   If you do not have a `hyprpaper.service` file, you can create one in `~/.config/systemd/user/hyprpaper.service`:
+
+   ```ini
+   [Unit]
+   Description=Hyprpaper wallpaper daemon
+
+   [Service]
+   ExecStart=hyprpaper
+
+   [Install]
+   WantedBy=default.target
+   ```
+
+   Then reload systemd and enable:
+
+   ```sh
+   systemctl --user daemon-reload
+   systemctl --user enable --now hyprpaper.service
+   ```
+
+4. Run the wallpaper!
+
+   After running the install script and starting hyprpaper; enable and start the service with:
 
    ```sh
    systemctl --user daemon-reload
    systemctl --user enable --now doom-fire-wallpaper.service
+   systemctl --user start --now doom-fire-wallpaper.service
    ```
-  
+
    **Or run manually:**
 
    ```sh
-   hyprpaper &
+   hyprpaper &  # If not already running!
    cargo run --release
    ```
-
-   Or run the binary directly from `target/release/doom-fire-wallpaper`.
-
-3. **Enable hyprpaper**
-
-  **Make sure Hyprpaper is enabled and running in your Hyprland session.**  
-  You can enable it as a systemd user service for automatic startup:
-
-  ```sh
-  systemctl --user enable --now hyprpaper.service
-  ```
-
-  Or, you can start it manually (for testing):
-
-  ```sh
-  hyprpaper &
-  ```
-
-  If you do not have a `hyprpaper.service` file, you can create one in `~/.config/systemd/user/hyprpaper.service`:
-
-  ```ini
-  [Unit]
-  Description=Hyprpaper wallpaper daemon
-
-  [Service]
-  ExecStart=hyprpaper
-
-  [Install]
-  WantedBy=default.target
-  ```
-
-  Then reload systemd and enable:
-
-  ```sh
-  systemctl --user daemon-reload
-  systemctl --user enable --now hyprpaper.service
-  ```
 
 ---
 
@@ -113,18 +112,18 @@ screen_height = 1080
 scale = 4
 fps = 23
 output = ""
-fire_type = "Original"    # See fire type section for options
-background = [0, 0, 0]  # Optional: RGB array, e.g. [20, 20, 20] for dark gray
-restart_on_pause = true # Optional: true (default) or false, controls if animation restarts after pause.
+fire_type = "Original"    # See fire type section below for options
+background = [0, 0, 0]  # Optional: RGB array, e.g. [20, 20, 20] for dark grey
+restart_on_pause = true # Optional: true (default) or false, controls if animation restarts after pause. 
 pause_on_cover = true   # Optional: true (default) pauses animation when all screens contain a window; set to false to keep animating even when covered
-random_on_pause = false # Optional: false (default) or true, selects random fire type restart after pause if fire type is "Random"
+
 ```
 
 **All fields are optional**; defaults will be used if not set.
 
 ### Applying Config Changes
 
-After you change the configuration (either by editing `~/.config/doom-fire-wallpaper/config.toml` manually or using the CLI), **you must restart the wallpaper service for changes to take effect**:
+After you change the configuration **you must restart the wallpaper service for changes to take effect**:
 
 ```sh
 systemctl --user restart doom-fire-wallpaper.service
@@ -154,8 +153,8 @@ systemctl --user restart doom-fire-wallpaper.service
 
 ## How it Works
 
-- The program generates a new fire frame, saves it as a WebP image in `~/.cache/hyprpaper/doomfire.webp`.
-- It then tells Hyprpaper to reload the wallpaper using `hyprctl`.
+- The program generates a new frame and then saves it as a WebP image in `~/.cache/hyprpaper/doomfire.webp`.
+- It  tells Hyprpaper to reload the wallpaper using `hyprctl`.
 - This loop runs at your chosen FPS, creating a smooth animated effect.
 - When all monitors contain a client window or the system is dormant, the animation will be paused to save CPU utilization.
 - If `restart_on_pause` is set to `true`, the animation restarts from the beginning after a pause; if `false`, it resumes where it left off.
@@ -188,4 +187,3 @@ systemctl --user restart doom-fire-wallpaper.service
 
 WTFPL  
 Enjoy your everliving flame!
-
