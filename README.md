@@ -29,14 +29,14 @@ This project generates a real-time animated fire effect, saves each frame as a W
 1. **Install with Yay:**
 
   ```sh
-  yay install doomfire-wallpaper
+  yay -Sy doomfire-wallpaper
   ```
 
   **Or Make package manually**
   
   ```sh
-  git clone https://github.com/Leafmun-certii/doom_fire_wallpaper.git
-  cd doomfire_wallpaper/aur
+  git clone --recurse-submodules https://github.com/Leafmun-certii/doom_fire_wallpaper.git
+  cd doomfire-wallpaper
   makepkg -Cfsri
   ```
 
