@@ -116,6 +116,7 @@ fire_type = "Original"    # See fire type section below for options
 background = [0, 0, 0]  # Optional: RGB array, e.g. [20, 20, 20] for dark grey
 restart_on_pause = true # Optional: true (default) or false, controls if animation restarts after pause. 
 pause_on_cover = true   # Optional: true (default) pauses animation when all screens contain a window; set to false to keep animating even when covered
+screen_burn = false # Optional: false (default). If true, when a screen is uncovered, that screen will turn to fire
 
 ```
 

@@ -76,7 +76,7 @@ impl DoomFire {
                 let dst_x = x as isize + x_offset;
                 let dst_y = if rng.gen_bool(0.3) { y - 2 } else { y - 1 };
 
-                if dst_x >= 0 && dst_x < self.width as isize && dst_y > 0 {
+                if dst_x >= 0 && dst_x < self.width as isize {
                     let dst = dst_y * self.width + dst_x as usize;
                     let value = self.pixel_buffer[src].saturating_sub(decay);
                     self.pixel_buffer[dst] = value;

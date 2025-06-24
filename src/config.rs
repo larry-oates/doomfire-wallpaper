@@ -11,6 +11,7 @@ pub struct Config {
     pub background: Option<[u8; 3]>,
     pub restart_on_pause: Option<bool>,
     pub pause_on_cover: Option<bool>,
+    pub screen_burn: Option<bool>,
 }
 
 impl Config {
@@ -31,6 +32,7 @@ impl Config {
             background: config.background.or(default.background),
             restart_on_pause: config.restart_on_pause.or(default.restart_on_pause),
             pause_on_cover: config.pause_on_cover.or(default.pause_on_cover),
+            screen_burn: config.screen_burn.or(default.screen_burn),
         }
     }
 }
@@ -47,6 +49,7 @@ impl Default for Config {
             background: None,
             restart_on_pause: Some(true),
             pause_on_cover: Some(true),
+            screen_burn: Some(false), // Default: disabled
         }
     }
 }
