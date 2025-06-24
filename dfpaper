@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e
-
 COMMAND="$1"
 
 setup() {
@@ -21,7 +20,6 @@ restart_on_pause = true
 EOF
         echo "Created example config at $CONFIG_DIR/config.toml"
     fi
-
     # Create systemd user service
     SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
     mkdir -p "$SYSTEMD_USER_DIR"
@@ -40,10 +38,7 @@ Nice=10
 [Install]
 WantedBy=default.target
 EOF
-
     echo "Created systemd user service at $SYSTEMD_USER_DIR/doom-fire-wallpaper.service"
-
-
     if ! command -v hyprpaper >/dev/null 2>&1; then
         echo "Error: Hyprpaper is not installed or not in your PATH."
         echo "Please install Hyprpaper: https://github.com/hyprwm/hyprpaper"
@@ -65,6 +60,13 @@ refresh() {
     echo "Service reloaded and restarted."
 }
 
+stop() {
+    echo "Stopping and disabling doom-fire-wallpaper systemd user service..."
+    systemctl --user stop doom-fire-wallpaper.service
+    systemctl --user disable doom-fire-wallpaper.service
+    echo "Service stopped and disabled."
+}
+
 case "$COMMAND" in
     setup)
         setup
@@ -72,11 +74,15 @@ case "$COMMAND" in
     refresh)
         refresh
         ;;
+    stop)
+        stop
+        ;;
     ""|help|-h|--help)
         echo "Usage: $0 <command>"
         echo "Commands:"
-        echo "  setuo   Sets up the doom-fire-wallpaper and its service."
+        echo "  setup     Sets up the doom-fire-wallpaper and its service."
         echo "  refresh   Reload the wallpaper service after config changes."
+        echo "  stop      Stop and disable the wallpaper service."
         ;;
     *)
         echo "Unknown command: $COMMAND"

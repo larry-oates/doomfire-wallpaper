@@ -26,79 +26,58 @@ This project generates a real-time animated fire effect, saves each frame as a W
 
 ## Installation
 
-1. **Clone the repository:**
+1. **Install with Yay:**
 
-   ```sh
-   git clone https://github.com/Leafmun-certii/doom_fire_wallpaper.git
-   cd doom_fire_wallpaper
+  ```sh
+  yay install doomfire-wallpaper
+  ```
+
+  **Or Make package manually**
+  
+  ```sh
+  git clone https://github.com/Leafmun-certii/doom_fire_wallpaper.git
+  cd doomfire_wallpaper/aur
+  makepkg -Cfsri
+  ```
+
+2. **Enable hyprpaper**
+
+  **Make sure [Hyprpaper](https://github.com/hyprwm/hyprpaper) is enabled and running in your Hyprland session.**  
+  You can enable it as a systemd user service for automatic startup:
+
+  ```sh
+  systemctl --user enable --now hyprpaper.service
+  systemctl --user start --now hyprpaper.service
+  ```
+
+  If you do not have a `hyprpaper.service` file, you can create one in `~/.config/systemd/user/hyprpaper.service`:
+
+  ```ini
+  [Unit]
+  Description=Fast, IPC-controlled wallpaper utility for Hyprland.
+  Documentation=<https://wiki.hyprland.org/Hypr-Ecosystem/hyprpaper/>
+  PartOf=graphical-session.target
+  Requires=graphical-session.target
+  After=graphical-session.target
+  ConditionEnvironment=WAYLAND_DISPLAY
+
+  [Service]
+  Type=simple
+  ExecStart=/usr/bin/hyprpaper
+  Slice=session.slice
+  Restart=on-failure
+
+  [Install]
+  WantedBy=graphical-session.target
    ```
 
-2. **(Recommended) Use the install script:**
+3. **Run the wallpaper!**
 
-   ```sh
-   sh ./install.sh
-   ```
+  Generate the config file, enable and start the service with:
 
-   Do not run this as sudo!  
-   This script will:
-   - Build the project
-   - Copy the binary to `~/.local/bin`
-   - Create an example config file at `~/.config/doom-fire-wallpaper/config.toml` (if it doesn't exist)
-   - Install a systemd user service for autostart at `~/.config/systemd/user/doom-fire-wallpaper.service`
-
-   ```
-
-3. **Enable hyprpaper**
-
-   **Make sure Hyprpaper is enabled and running in your Hyprland session.**  
-   You can enable it as a systemd user service for automatic startup:
-
-   ```sh
-   systemctl --user enable --now hyprpaper.service
-   ```
-
-   Or, you can start it manually (for testing):
-
-   ```sh
-   hyprpaper &
-   ```
-
-   If you do not have a `hyprpaper.service` file, you can create one in `~/.config/systemd/user/hyprpaper.service`:
-
-   ```ini
-   [Unit]
-   Description=Hyprpaper wallpaper daemon
-
-   [Service]
-   ExecStart=hyprpaper
-
-   [Install]
-   WantedBy=default.target
-   ```
-
-   Then reload systemd and enable:
-
-   ```sh
-   systemctl --user daemon-reload
-   systemctl --user enable --now hyprpaper.service
-   ```
-
-4. Run the wallpaper!
-
-   After running the install script and starting hyprpaper; enable and start the service with:
-
-   ```sh
-   systemctl --user daemon-reload
-   systemctl --user enable --now doom-fire-wallpaper.service
-   systemctl --user start --now doom-fire-wallpaper.service
-   ```
-
-   **Or run manually:**
-
-   ```sh
-   hyprpaper &  # If not already running!
-   cargo run --release
-   ```
+  ```sh
+  dfpaper setup
+  ```
 
 ---
 
@@ -127,7 +106,7 @@ screen_burn = false # Optional: false (default). If true, when a screen is uncov
 After you change the configuration **you must restart the wallpaper service for changes to take effect**:
 
 ```sh
-systemctl --user restart doom-fire-wallpaper.service
+dfpaper refresh
 ```
 
 ### Fire Types
@@ -159,6 +138,8 @@ systemctl --user restart doom-fire-wallpaper.service
 - This loop runs at your chosen FPS, creating a smooth animated effect.
 - When all monitors contain a client window or the system is dormant, the animation will be paused to save CPU utilization.
 - If `restart_on_pause` is set to `true`, the animation restarts from the beginning after a pause; if `false`, it resumes where it left off.
+- If `screen_burn` is set to `true` a screen shot is taken every 100 ms using grim, converted to greyscale
+and applied to the background when the last window on a screen is closed
 
 ---
 
@@ -186,5 +167,5 @@ systemctl --user restart doom-fire-wallpaper.service
 
 ## License
 
-WTFPL  
+0BSD  
 Enjoy your everliving flame!
