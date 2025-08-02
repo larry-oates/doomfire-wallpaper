@@ -1,6 +1,5 @@
 mod doom_fire;
 mod perlin;
-mod render;
 mod wallpaper;
 
 pub mod config;
@@ -9,106 +8,189 @@ pub mod particle;
 
 use crate::config::Config;
 use crate::doom_fire::DoomFire;
-use crate::render::render_fire_frame_to_image;
-use crate::wallpaper::{get_outputs_covered, is_system_sleeping, load_wallpaper};
+use crate::wallpaper::{get_outputs_covered, is_system_sleeping};
+use gtk4 as gtk;
+use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
+use gtk::glib::source::timeout_add_local;
+use gtk::prelude::*;
+use gtk::{Application, ApplicationWindow, Picture};
 use image::{DynamicImage, GenericImageView, Pixel};
-use std::{collections::HashMap, fs, time::{Instant}};
+use rayon::prelude::*;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
+const BYTES_PER_PIXEL: usize = 3; // RGB = 3 bytes
 
-fn main() -> anyhow::Result<()> {
-    let config = Config::load();
-    println!("Using config: {:?}", config);
-    let mut fire = DoomFire::new(&config);
+fn main() {
+    let app = Application::new(Some("com.leafman.doomfirewallpaper"), Default::default());
 
-    let cache_dir = dirs::home_dir()
-        .expect("Could not find home directory")
-        .join(".cache/hyprpaper");
-    fs::create_dir_all(&cache_dir)?;
-    let wallpaper_path = cache_dir.join("doomfire.webp");
-    let mut restart_flag = false;
-    let restart_on_pause = config.restart_on_pause.unwrap(); 
-    let fps = config.fps.unwrap(); 
-    let output = config.output.clone().unwrap();
-    let pause_on_cover = config.pause_on_cover.unwrap();
-    let screen_burn = config.screen_burn.unwrap();
-    let mut screenshot_count = 0;
-    let mut last_screenshot: HashMap<String, DynamicImage> = HashMap::new();
-    
-    loop {
-        let start = Instant::now();
-        let covered_outputs = get_outputs_covered();
-        let all_covered = covered_outputs.iter().all(|(_, c)| *c);
-        let sleeping = is_system_sleeping();
-        let paused = (pause_on_cover && all_covered) || sleeping;
+    app.connect_activate(|app| {
+        println!("App Connected!");
+        let config = Config::load();
+        println!("Using config: {:?}", config);
+        let fire = Rc::new(RefCell::new(DoomFire::new(&config)));
 
-        // Take screenshots for all outputs when they become covered (for burn effect)
-        if screen_burn && all_covered {
-            screenshot_count += 1;
-            if screenshot_count == 25 {
-                screenshot_count = 0;
-                for (name, _covered) in &covered_outputs {
-                    if let Ok(output) = std::process::Command::new("grim")
-                    .args(["-o", name, "-" ])
-                    .output() {
-                        if output.status.success() {
-                            if let Ok(i) = image::load_from_memory(&output.stdout) {
-                                last_screenshot.insert(name.clone(), i);
+        let restart_on_pause = config.restart_on_pause.unwrap_or(false);
+        let fps = config.fps.unwrap_or(10);
+        let pause_on_cover = config.pause_on_cover.unwrap_or(false);
+        let screen_burn = config.screen_burn.unwrap_or(false);
+        let height = config.screen_height.unwrap();
+        let width = config.screen_width.unwrap();
+        let scale = config.scale.unwrap_or(1);
+
+        let window = ApplicationWindow::builder()
+            .application(app)
+            .title("Doom Fire Wallpaper")
+            .build();
+
+        let image = Picture::new();
+        window.set_child(Some(&image));
+        window.present();
+
+        let mut last_screenshot: HashMap<String, DynamicImage> = HashMap::new();
+        let mut screenshot_count = -1;
+
+        timeout_add_local(std::time::Duration::from_millis(1000 / fps as u64), {
+            let image = image.clone();
+            let fire = fire.clone();
+            let mut was_paused = false;
+
+            move || {
+                let mut fire = fire.borrow_mut();
+
+                let covered_outputs = get_outputs_covered();
+                let all_covered = covered_outputs.iter().all(|(_, c)| *c);
+                let sleeping = is_system_sleeping();
+                let paused = (pause_on_cover && all_covered) || sleeping;
+
+                // Transition detection: just entered paused state
+                let just_paused = paused && !was_paused;
+                was_paused = paused;
+                
+                if screen_burn && all_covered {
+                    screenshot_count += 1;
+                    if screenshot_count == 24 {
+                        screenshot_count = 0;
+                        for (name, _covered) in &covered_outputs {
+                            eprintln!("[DEBUG] Taking screenshot for output: {}", name);
+                            if let Ok(output) = std::process::Command::new("grim")
+                            .args(["-o", name, "-"])
+                                .output()
+                                {
+                                if output.status.success() {
+                                    if let Ok(i) = image::load_from_memory(&output.stdout) {
+                                        last_screenshot.insert(name.clone(), i);
+                                    } else {
+                                        eprintln!(
+                                            "[DEBUG] Failed to decode screenshot for {}",
+                                            name
+                                        );
+                                    }
+                                } else {
+                                    eprintln!("[DEBUG] Screenshot command failed for {}", name);
+                                }
                             }
                         }
                     }
                 }
-            }
-        }
+                
+                if paused {
+                    if just_paused {
+                        eprintln!("[DEBUG] Fire paused (first frame)");
 
-        // Handle paused state
-        if paused {
-            std::thread::sleep(std::time::Duration::from_millis(10));
-            if restart_on_pause && !restart_flag {
-                restart_flag = true;
-                let bg_idx = 0u8;
-                fire.pixel_buffer.iter_mut().for_each(|x| *x = bg_idx);
-                let img = render_fire_frame_to_image(&fire)?;
-                let mut file = std::fs::File::create(&wallpaper_path)?;
-                img.write_to(&mut file, image::ImageFormat::WebP)?;
-                load_wallpaper(&wallpaper_path, &output)?;
-            }
-            continue;
-        }
-        if restart_flag {
-            restart_flag = false;
-            fire.initialize_fire();
-        }
-        if screen_burn {
-            if let Some((name, _)) = covered_outputs.iter().find(|(_, covered)| !*covered) {
-                if let Some(img) = last_screenshot.remove(name) {
-                    last_screenshot.clear();
-                    let resized = img.resize_exact(fire.width as u32, fire.height as u32, image::imageops::FilterType::Triangle);
-                    for y in 0..fire.height {
-                        for x in 0..fire.width {
-                            let px = resized.get_pixel(x as u32, y as u32);
-                            let luma = px.to_luma()[0] as usize;
-                            let idx = ((luma as f32 / 255.0) * (fire.palette.len() as f32 - 1.0)).round() as u8;
-                            let fire_idx = &mut fire.pixel_buffer[y * fire.width + x];
-                            *fire_idx = (*fire_idx).max(idx);
+                        if restart_on_pause {
+                            fire.initialize_fire();
+                        }
+
+                        // Allow render to happen once
+                    } else {
+                        eprintln!("[DEBUG] Fire paused (skipping render)");
+                        return glib::ControlFlow::Continue;
+                    }
+                } else {
+                    // Not paused, normal update
+                    fire.update();
+                }
+                
+                if screen_burn {
+                    if let Some((name, _)) = covered_outputs.iter().find(|(_, c)| !*c) {
+                        if let Some(img) = last_screenshot.remove(name) {
+                            last_screenshot.clear();
+                            let resized = img.resize_exact(
+                                fire.width as u32,
+                                fire.height as u32,
+                                image::imageops::FilterType::Triangle,
+                            );
+                            for y in 0..fire.height {
+                                for x in 0..fire.width {
+                                    let px = resized.get_pixel(x as u32, y as u32);
+                                    let luma = px.to_luma()[0] as usize;
+                                    let idx =
+                                    ((luma as f32 / 255.0) * (fire.palette.len() as f32 - 1.0))
+                                    .round() as u8;
+                                let current_idx = y * fire.width + x;
+                                let fire_idx = &mut fire.pixel_buffer[current_idx];
+                                *fire_idx = (*fire_idx).max(idx);
+                            }
+                            }
+                            eprintln!("[DEBUG] Burn-in applied from screenshot");
                         }
                     }
                 }
-            }
-        }
-
-        let img = render_fire_frame_to_image(&fire)?;
-        fire.update();
-
-        let mut file = std::fs::File::create(&wallpaper_path)?;
-        img.write_to(&mut file, image::ImageFormat::WebP)?;
-
-        load_wallpaper(&wallpaper_path, &output)?;
-
-        let elapsed = start.elapsed();
-        let sleep_time = std::time::Duration::from_millis(1000 / fps as u64).saturating_sub(elapsed);
-        if sleep_time > std::time::Duration::ZERO {
-            std::thread::sleep(sleep_time);
-        }
+                
+                // Clone fire buffer for rendering
+                let fire_palette = fire.palette.to_vec();
+                let fire_buffer = fire.pixel_buffer.to_vec();
+                let fire_width = fire.width as usize;
+                let fire_height = fire.height as usize;
+                
+                let pixels = {
+                    let mut buffer = vec![0u8; width * height * BYTES_PER_PIXEL];
+                    // Fill buffer with your fire palette pixels here, same as your existing code:
+                    buffer
+                    .par_chunks_mut(width * BYTES_PER_PIXEL)
+                    .enumerate()
+                    .for_each(|(wy, row)| {
+                        let fy = wy / scale;
+                        if fy < fire_height {
+                            for fx in 0..fire_width {
+                                let idx = fire_buffer[fy * fire_width + fx] as usize;
+                                let color = fire_palette[idx];
+                                let start_wx = fx * scale as usize;
+                                let end_wx = ((fx + 1) * scale as usize).min(width as usize);
+                                
+                                let slice_start = start_wx * BYTES_PER_PIXEL;
+                                let slice_end = end_wx * BYTES_PER_PIXEL;
+                                
+                                if slice_end <= row.len() {
+                                    for pixel_chunk in row[slice_start..slice_end]
+                                    .chunks_exact_mut(BYTES_PER_PIXEL)
+                                    {
+                                        pixel_chunk.copy_from_slice(&color);
+                                    }
+                                    }
+                                }
+                            }
+                        });
+                        buffer
+                    };
+                    
+                    // Now create the Pixbuf from the owned pixel vector
+                    let pixbuf = Pixbuf::from_bytes(
+                        &glib::Bytes::from_owned(pixels),
+                        Colorspace::Rgb,
+                        false,                    // no alpha channel
+                        8,                        // bits per sample
+                        width as i32,
+                        height as i32,
+                        width as i32 * BYTES_PER_PIXEL as i32, // rowstride in bytes
+                    );
+                    
+                    // Update the GTK image widget
+                    image.set_pixbuf(Some(&pixbuf));
+                    
+                    glib::ControlFlow::Continue
+                }
+            });
+        });
+        app.run();
     }
-}
-

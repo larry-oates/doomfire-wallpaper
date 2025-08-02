@@ -1,7 +1,8 @@
-use crate::fire_types::{FireType, generate_palette};
-use crate::particle::Particle;
+use crate::fire_types::{generate_palette, FireType};
 use crate::config::Config;
+use crate::particle::Particle;
 use crate::perlin::perlin_noise_1d;
+use rand::rngs::ThreadRng;
 use rand::Rng;
 use strum::IntoEnumIterator;
 
@@ -37,7 +38,8 @@ impl DoomFire {
             Some("Candy") => FireType::Candy,
             Some("Random") => {
                 let variants: Vec<FireType> = FireType::iter().collect();
-                let idx = rand::random::<usize>() % variants.len();
+                let mut rng = ThreadRng::default();
+                let idx = rng.random_range(0..variants.len());
                 println!("Random fire type selected: {:?}", variants[idx]);
                 variants[idx]
             }
@@ -62,19 +64,19 @@ impl DoomFire {
     }
 
     pub fn update(&mut self) {
-        let mut rng = rand::thread_rng();
+        let mut rng = ThreadRng::default();
         self.t += 0.03; // Increase frequency for more rapid wind changes
         let noise_val = perlin_noise_1d(self.t * 1.5);
-        let jitter: f64 = rng.gen_range(-0.5..=0.5);
+        let jitter: f64 = rng.random_range(-0.5..=0.5);
         let wind = ((noise_val + jitter) * 1.0).round() as isize;
         let delay_chance = 0.3;
         for y in (2..self.height).rev() {
             for x in 0..self.width {
                 let src = y * self.width + x;
-                let decay = rng.gen_bool(delay_chance) as u8; // Random decay factor
-                let x_offset = rng.gen_range(0..3) as isize - 1 + wind;
+                let decay = if rng.random_bool(delay_chance) { 1 } else { 0 }; // Random decay factor
+                let x_offset = rng.random_range(0..3) as i32 as isize - 1 + wind;
                 let dst_x = x as isize + x_offset;
-                let dst_y = if rng.gen_bool(0.3) { y - 2 } else { y - 1 };
+                let dst_y = if rng.random_bool(0.3) { y - 2 } else { y - 1 };
 
                 if dst_x >= 0 && dst_x < self.width as isize {
                     let dst = dst_y * self.width + dst_x as usize;
@@ -91,7 +93,6 @@ impl DoomFire {
             self.palette.len(),
             self.width,
             self.height,
-            &mut rng,
         );
 
         // Update and render particles
@@ -132,7 +133,8 @@ impl DoomFire {
         // Initialize the bottom row as usual
         for x in 0..self.width {
             if self.fire_type == FireType::Candy {
-                let rand: usize = rand::thread_rng().gen_range(self.palette.len() / 2..self.palette.len());
+                let mut rng = ThreadRng::default();
+                let rand: usize = rng.random_range(self.palette.len() / 2..self.palette.len());
                 self.pixel_buffer[(self.height - 1) * self.width + x] = rand as u8;
             } else {
                 // For other palettes, we start with the last color in the palette

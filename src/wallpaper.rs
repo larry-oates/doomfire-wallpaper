@@ -1,5 +1,4 @@
 use std::process::Command;
-use std::path::PathBuf;
 
 pub fn is_system_sleeping() -> bool {
     let output = Command::new("systemctl")
@@ -11,36 +10,6 @@ pub fn is_system_sleeping() -> bool {
     } else {
         false
     }
-}
-pub fn load_wallpaper(path: &PathBuf, output: &str) -> anyhow::Result<()> {
-    let status = Command::new("hyprctl")
-        .args([
-            "hyprpaper",
-            "preload",
-            &format!("{}", path.to_str().unwrap()),
-        ])
-        .status()?;
-    if !status.success() {
-        eprintln!("Failed to set wallpaper with hyprpaper");
-    }let status = Command::new("hyprctl")
-        .args([
-            "hyprpaper",
-            "wallpaper",
-            &format!("{},{}", output, path.to_str().unwrap()),
-        ])
-        .status()?;
-    if !status.success() {
-        eprintln!("Failed to set wallpaper with hyprpaper");
-    }
-
-    let status = Command::new("hyprctl")
-        .args(["hyprpaper", "unload", "all"])
-        .status()?;
-    if !status.success() {
-        eprintln!("Failed to reload hyprpaper");
-    }
-
-    Ok(())
 }
 
 /// Returns Vec<(output_name, is_covered)> for all outputs.
@@ -67,6 +36,20 @@ pub fn get_outputs_covered() -> Vec<(String, bool)> {
             .cloned();
         let mut found = false;
         for client in clients.as_array().unwrap_or(&vec![]) {
+            if client
+                .get("hidden")
+                .and_then(|h| h.as_bool())
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            if client
+                .get("mapped")
+                .and_then(|m| m.as_bool())
+                .unwrap_or(true) == false
+            {
+                continue;
+            }
             let client_ws_id = client.get("workspace")
                 .and_then(|ws| ws.get("id").or_else(|| ws.get("name")))
                 .cloned();

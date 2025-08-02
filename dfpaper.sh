@@ -53,10 +53,22 @@ EOF
 }
 
 refresh() {
-    echo "Reloading and restarting doom-fire-wallpaper systemd user service..."
+    echo "Force-restarting doom-fire-wallpaper..."
     systemctl --user daemon-reload
-    systemctl --user restart doom-fire-wallpaper.service
-    echo "Service reloaded and restarted."
+
+    echo "Stopping service..."
+    systemctl --user stop doom-fire-wallpaper.service
+
+    # Explicitly kill the process to ensure it's gone.
+    if pkill -f "/usr/bin/doom-fire-wallpaper"; then
+        echo "Killed running doom-fire-wallpaper process."
+        # Give it a moment to terminate.
+        sleep 0.2
+    fi
+
+    echo "Starting new instance..."
+    systemctl --user start doom-fire-wallpaper.service
+    echo "Wallpaper restarted."
 }
 
 stop() {

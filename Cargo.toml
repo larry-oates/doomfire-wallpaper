@@ -7,16 +7,20 @@ description = "Animated Doom fire effect as a Hyprpaper wallpaper"
 license = "MIT"
 
 [dependencies]
-image = { version = "0.24", features = ["webp"] }         # For image creation and saving
-rand = "0.8"           # For randomness in fire decay and wind
+image = { version = "0.25", features = ["webp"] }         # For image creation and saving
+rand = "0.9.2"           # For randomness in fire decay and wind
 anyhow = "1.0"         # For easy error handling
-dirs = "5.0"           # For getting the user's home directory
 rayon = "1.8"          # For parallel rending
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
-serde_json = "1.0.140"
-strum_macros = "0.27.1"
-strum = "0.27.1"
+toml = "0.9.3"
+serde_json = "1.0.141"
+strum_macros = "0.27.2"
+strum = "0.27.2"
+minifb = "0.28.0"
+dirs = "6.0.0"
+gdk-pixbuf = "0.21.0"
+glib = "0.21.0"
+gtk4 = "0.10.0"
 
 [[bin]]
 name = "doom-fire-wallpaper"
