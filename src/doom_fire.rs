@@ -14,6 +14,7 @@ pub struct DoomFire {
     pub fire_type: FireType,
     t: f64,
     pub particles: Vec<Particle>, // Add this field
+    wind_strength: f64,
 }
 
 impl DoomFire {
@@ -58,6 +59,7 @@ impl DoomFire {
             fire_type,
             t: 0.0,
             particles: Vec::new(),
+            wind_strength: config.wind_strength.unwrap_or(1.0),
         };
         doom_fire.initialize_fire();
         doom_fire
@@ -68,7 +70,7 @@ impl DoomFire {
         self.t += 0.03; // Increase frequency for more rapid wind changes
         let noise_val = perlin_noise_1d(self.t * 1.5);
         let jitter: f64 = rng.random_range(-0.5..=0.5);
-        let wind = ((noise_val + jitter) * 1.0).round() as isize;
+        let wind = ((noise_val + jitter) * self.wind_strength).round() as isize;
         let delay_chance = 0.3;
         for y in (2..self.height).rev() {
             for x in 0..self.width {

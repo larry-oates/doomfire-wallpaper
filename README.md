@@ -86,7 +86,7 @@ fire_type = "Original"    # See fire type section below for options
 # restart_on_pause = true # True or false, controls if animation restarts after pause.
 # pause_on_cover = true   # True pauses animation when all screens contain a window; set to false to keep animating even when covered
 # screen_burn = false     # If true, when a screen is uncovered, that screen will turn to fire
-
+# wind_strength = 0.5     # Float, controls how much the fire is affected by wind. 0.0 for no wind.
 ```
 
 **All fields are optional**; defaults will be used if not set.

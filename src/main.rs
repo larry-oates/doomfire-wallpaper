@@ -64,6 +64,7 @@ fire_type = "Original"
 # restart_on_pause = true
 # pause_on_cover = true
 # screen_burn = false
+# wind_strength = 1.0
 "#;
 
 /// Runs the GTK application and the wallpaper animation loop.
