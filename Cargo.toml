@@ -8,7 +8,6 @@ license = "0BSD"
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "4.5", features = ["derive"] }
 dirs = "5.0"
 gdk-pixbuf = "0.21.0"
 glib = "0.21.0"

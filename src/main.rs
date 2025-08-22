@@ -10,7 +10,6 @@ use crate::config::Config;
 use crate::doom_fire::DoomFire;
 use crate::wallpaper::{get_outputs_covered, is_system_sleeping};
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
 use gtk4 as gtk;
 use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 use gtk::glib::source::timeout_add_local;
@@ -23,101 +22,27 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::Command;
 use std::rc::Rc;
 
 const BYTES_PER_PIXEL: usize = 3; // RGB = 3 bytes
-const SERVICE_NAME: &str = "doom-fire-wallpaper.service";
-
-/// A DOOM-style fire wallpaper for Hyprland/Hyprpaper
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Cli {
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Subcommand, Debug)]
-enum Commands {
-    /// Set up the configuration and systemd service
-    Setup,
-    /// Restart the wallpaper service to apply changes
-    Refresh,
-    /// Stop and disable the wallpaper service
-    Stop,
-}
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
-
-    match cli.command {
-        Some(Commands::Setup) => setup(),
-        Some(Commands::Refresh) => refresh(),
-        Some(Commands::Stop) => stop(),
-        None => run_wallpaper(),
-    }
+    run_wallpaper()
 }
 
-/// Sets up the default configuration and enables the systemd service.
-fn setup() -> Result<()> {
-    println!("Setting up doom-fire-wallpaper...");
-
-    // 1. Create config directory and default config file
+/// Creates the default config file if it doesn't exist.
+fn ensure_config_exists() -> Result<()> {
     let config_path = get_config_path()?;
-    if let Some(parent) = config_path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create config directory at {:?}", parent))?;
-    }
-
     if !config_path.exists() {
+        if let Some(parent) = config_path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create config directory at {:?}", parent))?;
+        }
         let mut file = fs::File::create(&config_path)
             .with_context(|| format!("Failed to create config file at {:?}", config_path))?;
         file.write_all(DEFAULT_CONFIG.as_bytes())
             .context("Failed to write default config")?;
         println!("Created default config at {:?}", config_path);
-    } else {
-        println!("Config file already exists at {:?}", config_path);
-    }
-
-    // 2. Enable and start the systemd user service
-    println!("\nEnabling and starting systemd user service...");
-    run_systemctl(&["--user", "daemon-reload"])?;
-    run_systemctl(&["--user", "enable", "--now", SERVICE_NAME])?;
-
-    println!("\nSetup complete!");
-    println!("The wallpaper service is now running.");
-    println!("You can customize the settings in {:?}", config_path);
-    println!("Remember to run 'doom-fire-wallpaper refresh' after changing the config.");
-
-    Ok(())
-}
-
-/// Restarts the systemd service.
-fn refresh() -> Result<()> {
-    println!("Refreshing doom-fire-wallpaper service...");
-    run_systemctl(&["--user", "restart", SERVICE_NAME])?;
-    println!("Service restarted.");
-    Ok(())
-}
-
-/// Stops and disables the systemd service.
-fn stop() -> Result<()> {
-    println!("Stopping and disabling doom-fire-wallpaper service...");
-    run_systemctl(&["--user", "stop", SERVICE_NAME])?;
-    run_systemctl(&["--user", "disable", SERVICE_NAME])?;
-    println!("Service stopped and disabled.");
-    Ok(())
-}
-
-/// Helper to run systemctl commands.
-fn run_systemctl(args: &[&str]) -> Result<()> {
-    let status = Command::new("systemctl")
-        .args(args)
-        .status()
-        .context("Failed to execute systemctl command. Is systemd running?")?;
-
-    if !status.success() {
-        anyhow::bail!("systemctl command failed: `systemctl {}`", args.join(" "));
     }
     Ok(())
 }
@@ -143,6 +68,8 @@ fire_type = "Original"
 
 /// Runs the GTK application and the wallpaper animation loop.
 fn run_wallpaper() -> Result<()> {
+    ensure_config_exists()?;
+
     let app = Application::new(Some("com.leafman.doomfirewallpaper"), Default::default());
     app.connect_activate(build_ui);
     app.run();

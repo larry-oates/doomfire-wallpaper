@@ -1,11 +1,10 @@
 # DOOM-style fire wallpaper for Hyprpaper
 
-Want to use a [fire from DOOM](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper in Arch linux?  
+Want to use a [fire from DOOM](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper in Hyprland?  
 
 This project generates an animated fire effect in real-time and displays it in a GTK4 window.  
 Setting this as your wallpaper depends on your compositor, currently there is only a guide for Hyprland using Hyprwinwrap  
 *if you want it for another please raise an issue! [XWinWrap](https://github.com/mmhobi7/xwinwrap) could potentially work for a X11 setup...*
-
 
 ## Features
 
@@ -15,24 +14,21 @@ Setting this as your wallpaper depends on your compositor, currently there is on
 - **Parallel rendering**: Uses all CPU cores for fast frame generation.
 - **Configurable via TOML file**: Resolution, speed, palette, background colour, and more.
 
-
 ## Requirements
 
-- **Linux** (Wayland, with Hyprland)
+- **Linux** (with Hyprland)
 - [Rust/cargo](https://rust-lang.org/) (edition 2021)
 - [Hyprwinwrap](https://aur.archlinux.org/packages/hyprland-plugin-hyprwinwrap) - running and configured (as described below)
 
-
-
 ## Installation
 
-1. **Install with Yay:**
+1.**Install with Yay:**
 
   ```sh
   yay -Sy doomfire-wallpaper
   ```
 
-  **Or Make package manually**
+1b.**Or Make package manually**
   
   ```sh
   git clone https://github.com/Leafmun-certii/doom_fire_wallpaper.git
@@ -40,36 +36,41 @@ Setting this as your wallpaper depends on your compositor, currently there is on
   makepkg -Cfsri
   ```
 
-2. **Set up hyprwinwrap**
+2.**Set up hyprwinwrap**
 
-  **Make sure [Hyprwinwrap is enabled](https://github.com/hyprwm/hyprland-plugins) and running in your Hyprland session.**  
-  Add this to your hyprland.conf:
+  **Make sure Hyprwinwrap is enabled and running in your Hyprland session.**
+  Add this to your `hyprland.conf`:
 
-  ```
-    plugin {
-      hyprwinwrap {
-        class = com.leafman.doomfirewallpaper
-      }
+```.conf
+  plugin {
+    hyprwinwrap {
+      class = com.leafman.doomfirewallpaper
     }
-  ```
-
-3. **Setup the wallpaper!**
-
-To create the configuration file and enable the systemd service, run:
-```sh
-doom-fire-wallpaper setup
+  }
 ```
+
+3.**Setup the wallpaper!**
+
+ You can now run the wallpaper with:
+
+```sh
+doom-fire-wallpaper
+```
+
 This will create a default config at `~/.config/doom-fire-wallpaper/config.toml` and start the wallpaper.
 
+Set up the wallpaper to run on startup by adding:
 
+```.conf
+# Anywhere after you have loaded the hyprwinwrap plugin...
+exec-once = hyprpm reload 
+# add...
 
-## Usage
+# Doom fire wallpaper
+exec-once = doom-fire-wallpaper
+```
 
-- `doom-fire-wallpaper setup`: Creates a default .conf file if needed, enables & starts the systemd service.
-- `doom-fire-wallpaper refresh`: Restarts the service. Use this after changing your config file.
-- `doom-fire-wallpaper stop`: Stops and disables the service.
-- `doom-fire-wallpaper` : Runs the wallpaper directly. This is what the service executes at startup.
-
+to your hyprland.conf
 
 ## Configuration
 
@@ -97,7 +98,9 @@ After you change the configuration **you must restart the wallpaper service for 
 ```sh
 doom-fire-wallpaper refresh
 ```
+
 ---
+
 ### Fire Types
 
 - **Original:** Classic DOOM fire
@@ -118,7 +121,6 @@ doom-fire-wallpaper refresh
 - **Candy:** Pastel rainbow stripes
 - **Random:** Randomly selects a fire type on startup
 
-
 ## How It Works
 
 - The program is a GTK4 application that creates a borderless window.
@@ -126,7 +128,6 @@ doom-fire-wallpaper refresh
 - The `hyprwinwrap` plugin (configured in `hyprland.conf`) detects this window by its class name (`com.leafman.doomfirewallpaper`) and forces it to a background layer, effectively making it the wallpaper.
 - The animation pauses when all monitors are covered by other windows or when the system is asleep, to save CPU.
 - If `screen_burn` is set to `true`, when all screens are covered, the app will periodically take screenshots. When a screen becomes uncovered again, the last screenshot taken will be used to "burn" its shape into the fire animation.
-
 
 ## Troubleshooting
 
@@ -136,13 +137,13 @@ doom-fire-wallpaper refresh
   Increase the `scale` value or lower the resolution/FPS.
 - **Multiple monitors?**  
   Set the `output` variable to your desired monitor name (see `wlr-randr` or `hyprctl monitors`).
-
+- **Frozen screen?**  
+  Ensure you only have one instance of doom-fire-wallpaper running with htop
 
 ## Credits
 
 - Fire algorithm inspired by [Fabien Sanglard's DOOM fire article](https://fabiensanglard.net/doom_fire_psx/).
 - [rayon](https://crates.io/crates/rayon) for parallel rendering.
-
 
 ## License
 
