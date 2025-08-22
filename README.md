@@ -1,18 +1,20 @@
 # DOOM-style fire wallpaper for Hyprpaper
 
-Animated [Doom fire effect](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper for [Hyprpaper](https://github.com/hyprwm/hyprpaper) on Linux built with Rust.
+Want to use a [fire from DOOM](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper in Arch linux?  
 
-This project generates a real-time animated fire effect, saves each frame as a WebP image, and updates your wallpaper using Hyprpaper for a seamless, living flame desktop background.
+This project generates an animated fire effect in real-time and displays it in a GTK4 window.  
+Setting this as your wallpaper depends on your compositor, currently there is only a guide for Hyprland using Hyprwinwrap  
+*if you want it for another please raise an issue! [XWinWrap](https://github.com/mmhobi7/xwinwrap) could potentially work for a X11 setup*
 
 ---
 
 ## Features
 
 - **Real-time animated fire**: Classic DOOM-style fire simulation.
+- **Auto-pause**: The animation pauses when all screens (outputs) have a window (client) on them or your system is asleep to save CPU.
 - **Multiple colour palettes**: Original, blue, rainbow, toxic, purple, white-hot... add your own!
 - **Parallel rendering**: Uses all CPU cores for fast frame generation.
-- **Configurable via TOML file**: Resolution, speed, palette, background colour, etc.
-- **Auto-pause**: The animation pauses when all screens (outputs) have a window (client) on them or your system is asleep to save CPU.
+- **Configurable via TOML file**: Resolution, speed, palette, background colour, and more.
 
 ---
 
@@ -20,7 +22,7 @@ This project generates a real-time animated fire effect, saves each frame as a W
 
 - **Linux** (Wayland, with Hyprland and Hyprpaper)
 - [Rust/cargo](https://rust-lang.org/) (edition 2021)
-- [Hyprpaper](https://github.com/hyprwm/hyprpaper) - running and configured
+- [Hyprwinwrap](https://aur.archlinux.org/packages/hyprland-plugin-hyprwinwrap) - running and configured (as described below)
 
 ---
 
@@ -35,49 +37,40 @@ This project generates a real-time animated fire effect, saves each frame as a W
   **Or Make package manually**
   
   ```sh
-  git clone --recurse-submodules https://github.com/Leafmun-certii/doom_fire_wallpaper.git
-  cd doomfire-wallpaper
+  git clone https://github.com/Leafmun-certii/doom_fire_wallpaper.git
+  cd doom_fire_wallpaper/doomfire-wallpaper
   makepkg -Cfsri
   ```
 
-2. **Enable hyprpaper**
+2. **Set up hyprwinwrap**
 
-  **Make sure [Hyprpaper](https://github.com/hyprwm/hyprpaper) is enabled and running in your Hyprland session.**  
-  You can enable it as a systemd user service for automatic startup:
+  **Make sure [Hyprwinwrap](https://github.com/hyprwm/hyprland-plugins) is enabled and running in your Hyprland session.**  
+  Add this to your hyprland.conf:
 
-  ```sh
-  systemctl --user enable --now hyprpaper.service
-  systemctl --user start --now hyprpaper.service
+  ```
+    plugin {
+      hyprwinwrap {
+        class = com.leafman.doomfirewallpaper
+      }
+    }
   ```
 
-  If you do not have a `hyprpaper.service` file, you can create one in `~/.config/systemd/user/hyprpaper.service`:
+3. **Run the wallpaper on startup!**
 
-  ```ini
-  [Unit]
-  Description=Fast, IPC-controlled wallpaper utility for Hyprland.
-  Documentation=<https://wiki.hyprland.org/Hypr-Ecosystem/hyprpaper/>
-  PartOf=graphical-session.target
-  Requires=graphical-session.target
-  After=graphical-session.target
-  ConditionEnvironment=WAYLAND_DISPLAY
+To set up the configuration file and enable the systemd service, run:
+```sh
+doom-fire-wallpaper setup
+```
+This will create a default config at `~/.config/doom-fire-wallpaper/config.toml` and start the wallpaper.
 
-  [Service]
-  Type=simple
-  ExecStart=/usr/bin/hyprpaper
-  Slice=session.slice
-  Restart=on-failure
+---
 
-  [Install]
-  WantedBy=graphical-session.target
-   ```
+## Usage
 
-3. **Run the wallpaper!**
-
-  Generate the config file, enable and start the service with:
-
-  ```sh
-  dfpaper setup
-  ```
+- `doom-fire-wallpaper setup`: Creates a default config and enables/starts the systemd service.
+- `doom-fire-wallpaper refresh`: Restarts the service. Use this after changing your config file.
+- `doom-fire-wallpaper stop`: Stops and disables the service.
+- `doom-fire-wallpaper` : Runs the wallpaper directly. This is what the service executes at startup.
 
 ---
 
@@ -106,7 +99,7 @@ screen_burn = false # Optional: false (default). If true, when a screen is uncov
 After you change the configuration **you must restart the wallpaper service for changes to take effect**:
 
 ```sh
-dfpaper refresh
+doom-fire-wallpaper refresh
 ```
 
 ### Fire Types
