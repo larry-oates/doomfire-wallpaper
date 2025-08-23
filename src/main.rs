@@ -119,8 +119,7 @@ fn build_ui(app: &Application) {
 
             // Transition detection: just entered paused state
             let just_paused = paused && !was_paused;
-            was_paused = paused;
-
+            
             if screen_burn && all_covered {
                 screenshot_count += 1;
                 if screenshot_count == 24 {
@@ -128,8 +127,8 @@ fn build_ui(app: &Application) {
                     for (name, _covered) in &covered_outputs {
                         eprintln!("[DEBUG] Taking screenshot for output: {}", name);
                         if let Ok(output) = std::process::Command::new("grim")
-                            .args(["-o", name, "-"])
-                            .output()
+                        .args(["-o", name, "-"])
+                        .output()
                         {
                             if output.status.success() {
                                 if let Ok(i) = image::load_from_memory(&output.stdout) {
@@ -144,24 +143,31 @@ fn build_ui(app: &Application) {
                     }
                 }
             }
-
+            
             if paused {
                 if just_paused {
                     eprintln!("[DEBUG] Fire paused (first frame)");
-
+                    
                     if restart_on_pause {
-                        fire.initialize_fire();
+                        fire.pause_fire();
                     }
-                    // Allow render to happen once
                 } else {
                     eprintln!("[DEBUG] Fire paused (skipping render)");
                     return glib::ControlFlow::Continue;
                 }
             } else {
-                // Not paused, normal update
-                fire.update();
+                if was_paused {
+                    eprintln!("[DEBUG] Fire unpaused");
+                    if restart_on_pause {
+                        fire.initialize_fire();
+                    }
+                }
+                else {
+                    fire.update();
+                }
             }
-
+            was_paused = paused;
+            
             if screen_burn {
                 if let Some((name, _)) = covered_outputs.iter().find(|(_, c)| !*c) {
                     if let Some(img) = last_screenshot.remove(name) {

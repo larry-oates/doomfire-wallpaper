@@ -129,4 +129,13 @@ impl DoomFire {
 
         self.particles.clear(); // Clear particles on reset
     }
+
+    // Set the paused screen for the fire - purely background color
+    pub fn pause_fire(&mut self) {
+        // Clear the pixel buffer
+        self.pixel_buffer.iter_mut().for_each(|x| *x = 0);
+
+        self.particles.clear(); 
+        // Clear particles on reset
+    }
 }
