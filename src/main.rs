@@ -64,7 +64,7 @@ fire_type = "Original"
 # restart_on_pause = true
 # pause_on_cover = true
 # screen_burn = false
-# wind_strength = 1.0
+# wind_strength = 0.5
 "#;
 
 /// Runs the GTK application and the wallpaper animation loop.
@@ -103,12 +103,9 @@ fn build_ui(app: &Application) {
 
     let mut last_screenshot: HashMap<String, DynamicImage> = HashMap::new();
     let mut screenshot_count = -1;
+    let mut was_paused = false;
 
     timeout_add_local(std::time::Duration::from_millis(1000 / fps as u64), {
-        let picture = picture.clone();
-        let fire = fire.clone();
-        let mut was_paused = false;
-
         move || {
             let mut fire = fire.borrow_mut();
 
