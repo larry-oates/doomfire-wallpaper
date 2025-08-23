@@ -115,24 +115,7 @@ impl DoomFire {
         // Clear the pixel buffer
         self.pixel_buffer.iter_mut().for_each(|x| *x = 0);
 
-        // Draw fire type name as an overlay in the fire buffer
-        let name = format!("{:?}", self.fire_type);
-        let chars: Vec<char> = name.chars().collect();
-        let text_width = chars.len();
-        let y = self.height.saturating_sub(4); // 4 rows from the bottom
-        let x_offset = (self.width.saturating_sub(text_width)) / 2;
-
-        for (i, c) in chars.iter().enumerate() {
-            if *c != ' ' {
-                let idx = y * self.width + x_offset + i;
-                if idx < self.pixel_buffer.len() {
-                    // Use a mid-high palette value for visibility
-                    self.pixel_buffer[idx] = (self.palette.len() as u8 * 3 / 4).max(1);
-                }
-            }
-        }
-
-        // Initialize the bottom row as usual
+        // Initialize the bottom row
         for x in 0..self.width {
             if self.fire_type == FireType::Candy {
                 let mut rng = ThreadRng::default();
