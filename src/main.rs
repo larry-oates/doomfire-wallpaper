@@ -121,32 +121,19 @@ fn build_ui(app: &Application) {
                 screenshot_count += 1;
                 if screenshot_count == 24 {
                     screenshot_count = 0;
-                    for (name, _covered) in &covered_outputs {
-                        eprintln!("[DEBUG] Taking screenshot for output: {}", name);
-                        if let Ok(output) = std::process::Command::new("grim")
-                        .args(["-o", name, "-"])
-                        .output()
-                        {
-                            if output.status.success() {
-                                if let Ok(i) = image::load_from_memory(&output.stdout) {
-                                    last_screenshot.insert(name.clone(), i);
-                                } else {
-                                    eprintln!("[DEBUG] Failed to decode screenshot for {}", name);
-                                }
-                            } else {
-                                eprintln!("[DEBUG] Screenshot command failed for {}", name);
-                            }
-                        }
-                    }
+                    take_screenshots(&mut last_screenshot, &covered_outputs);
                 }
             }
             
             if paused {
                 if just_paused {
                     eprintln!("[DEBUG] Fire paused (first frame)");
-                    
                     if restart_on_pause {
                         fire.pause_fire();
+                    }
+                    if screen_burn {
+                        take_screenshots(&mut last_screenshot, &covered_outputs);
+                        screenshot_count = 0;
                     }
                 } else {
                     eprintln!("[DEBUG] Fire paused (skipping render)");
@@ -243,4 +230,24 @@ fn build_ui(app: &Application) {
             glib::ControlFlow::Continue
         }
     });
+}
+
+fn take_screenshots(last_screenshot: &mut HashMap<String, DynamicImage>, covered_outputs: &Vec<(String, bool)>) {
+    for (name, _covered) in covered_outputs {
+        eprintln!("[DEBUG] Taking screenshot for output: {}", name);
+        if let Ok(output) = std::process::Command::new("grim")
+        .args(["-o", name, "-"])
+        .output()
+        {
+            if output.status.success() {
+                if let Ok(i) = image::load_from_memory(&output.stdout) {
+                    last_screenshot.insert(name.clone(), i);
+                } else {
+                    eprintln!("[DEBUG] Failed to decode screenshot for {}", name);
+                }
+            } else {
+                eprintln!("[DEBUG] Screenshot command failed for {}", name);
+            }
+        }
+    }
 }
