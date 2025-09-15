@@ -50,10 +50,10 @@ fn ensure_config_exists() -> Result<()> {
 /// Helper to get the path to the config file.
 fn get_config_path() -> Result<PathBuf> {
     let config_dir = dirs::config_dir().context("Could not find config directory")?;
-    Ok(config_dir.join("doom-fire-wallpaper/config.toml"))
+    Ok(config_dir.join("doomfire-wallpaper/config.toml"))
 }
 
-const DEFAULT_CONFIG: &str = r#"# Default config for doom-fire-wallpaper
+const DEFAULT_CONFIG: &str = r#"# Default config for doomfire-wallpaper
 # For a full list of options, see the README on GitHub.
 screen_width = 1920
 screen_height = 1080

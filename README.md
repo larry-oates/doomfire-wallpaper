@@ -54,10 +54,10 @@ Setting this as your wallpaper depends on your compositor, currently there is on
  You can now run the wallpaper with:
 
 ```sh
-doom-fire-wallpaper
+doomfire-wallpaper
 ```
 
-This will create a default config at `~/.config/doom-fire-wallpaper/config.toml` and start the wallpaper.
+This will create a default config at `~/.config/doomfire-wallpaper/config.toml` and start the wallpaper.
 
 Set up the wallpaper to run on startup by adding:
 
@@ -67,14 +67,14 @@ exec-once = hyprpm reload
 # add...
 
 # Doom fire wallpaper
-exec-once = doom-fire-wallpaper
+exec-once = doomfire-wallpaper
 ```
 
 to your hyprland.conf
 
 ## Configuration
 
-The config file is created at `~/.config/doom-fire-wallpaper/config.toml` after running `doom-fire-wallpaper setup`.
+The config file is created at `~/.config/doomfire-wallpaper/config.toml` after running `doomfire-wallpaper setup`.
 
 ```toml
 screen_width = 1920
@@ -96,7 +96,7 @@ fire_type = "Original"    # See fire type section below for options
 After you change the configuration **you must restart the wallpaper service for changes to take effect**:
 
 ```sh
-doom-fire-wallpaper refresh
+doomfire-wallpaper refresh
 ```
 
 ---
@@ -138,7 +138,7 @@ doom-fire-wallpaper refresh
 - **Multiple monitors?**  
   Set the `output` variable to your desired monitor name (see `wlr-randr` or `hyprctl monitors`).
 - **Frozen screen?**  
-  Ensure you only have one instance of doom-fire-wallpaper running with htop
+  Ensure you only have one instance of doomfire-wallpaper running with htop
 
 ## Credits
 
