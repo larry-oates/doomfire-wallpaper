@@ -31,7 +31,7 @@ Setting this as your wallpaper depends on your compositor, currently there is on
 1b.**Or Make package manually**
   
   ```sh
-  git clone https://github.com/Leafmun-certii/doomfire-wallpaper.git
+  git clone https://github.com/larry-oates/doomfire-wallpaper.git
   cd doom_fire_wallpaper/doomfire-wallpaper
   makepkg -Cfsri
   ```
