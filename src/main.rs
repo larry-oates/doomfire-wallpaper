@@ -15,7 +15,7 @@ use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 use gtk::glib::source::timeout_add_local;
 use gtk::prelude::*;
 use gtk::{Application, ApplicationWindow, Picture};
-use image::{DynamicImage, GenericImageView, Pixel};
+use image::{DynamicImage, GenericImageView};
 use rayon::prelude::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -105,6 +105,7 @@ fn build_ui(app: &Application) {
     let mut screenshot_count = -1;
     let mut was_paused = false;
 
+    let background_color = config.background.unwrap_or([0, 0, 0]);
     timeout_add_local(std::time::Duration::from_millis(1000 / fps as u64), {
         move || {
             let mut fire = fire.borrow_mut();
@@ -127,17 +128,16 @@ fn build_ui(app: &Application) {
             
             if paused {
                 if just_paused {
-                    eprintln!("[DEBUG] Fire paused (first frame)");
                     if restart_on_pause {
+                        eprintln!("[DEBUG] Fire paused and reset");
                         fire.pause_fire();
+                    } else {
+                        eprintln!("[DEBUG] Fire paused (frozen)");
                     }
                     if screen_burn {
                         take_screenshots(&mut last_screenshot, &covered_outputs);
                         screenshot_count = 0;
                     }
-                } else {
-                    eprintln!("[DEBUG] Fire paused (skipping render)");
-                    return glib::ControlFlow::Continue;
                 }
             } else {
                 if was_paused {
@@ -146,9 +146,7 @@ fn build_ui(app: &Application) {
                         fire.initialize_fire();
                     }
                 }
-                else {
-                    fire.update();
-                }
+                fire.update();
             }
             was_paused = paused;
             
@@ -164,9 +162,12 @@ fn build_ui(app: &Application) {
                         for y in 0..fire.height {
                             for x in 0..fire.width {
                                 let px = resized.get_pixel(x as u32, y as u32);
-                                let luma = px.to_luma()[0] as usize;
-                                let idx = ((luma as f32 / 255.0) * (fire.palette.len() as f32 - 1.0))
-                                    .round() as u8;
+                                let r_diff = (px[0] as i32 - background_color[0] as i32).abs();
+                                let g_diff = (px[1] as i32 - background_color[1] as i32).abs();
+                                let b_diff = (px[2] as i32 - background_color[2] as i32).abs();
+                                let distance = (r_diff + g_diff + b_diff) as f32;
+                                let max_dist = 255.0 * 3.0;
+                                let idx = ((distance / max_dist) * (fire.palette.len() as f32 - 1.0)).round() as u8;
                                 let current_idx = y * fire.width + x;
                                 let fire_idx = &mut fire.pixel_buffer[current_idx];
                                 *fire_idx = (*fire_idx).max(idx);
