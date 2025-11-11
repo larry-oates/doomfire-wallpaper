@@ -23,6 +23,7 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::mpsc; // added
 
 const BYTES_PER_PIXEL: usize = 3; // RGB = 3 bytes
 
@@ -105,10 +106,20 @@ fn build_ui(app: &Application) {
     let mut screenshot_count = -1;
     let mut was_paused = false;
 
+    // Channel to receive screenshots taken on a background thread without blocking the UI
+    let (screenshot_tx, screenshot_rx) = mpsc::channel::<Vec<(String, DynamicImage)>>();
+    
     let background_color = config.background.unwrap_or([0, 0, 0]);
     timeout_add_local(std::time::Duration::from_millis(1000 / fps as u64), {
         move || {
             let mut fire = fire.borrow_mut();
+
+            // Drain any screenshots that were produced by background threads
+            while let Ok(batch) = screenshot_rx.try_recv() {
+                for (name, img) in batch {
+                    last_screenshot.insert(name, img);
+                }
+            }
 
             let covered_outputs = get_outputs_covered();
             let all_covered = covered_outputs.iter().all(|(_, c)| *c);
@@ -122,7 +133,13 @@ fn build_ui(app: &Application) {
                 screenshot_count += 1;
                 if screenshot_count == 24 {
                     screenshot_count = 0;
-                    take_screenshots(&mut last_screenshot, &covered_outputs);
+                    // Spawn screenshots on background thread
+                    let tx = screenshot_tx.clone();
+                    let covered_clone = covered_outputs.clone();
+                    std::thread::spawn(move || {
+                        let results = take_screenshots_sync(&covered_clone);
+                        let _ = tx.send(results);
+                    });
                 }
             }
             
@@ -135,8 +152,14 @@ fn build_ui(app: &Application) {
                         eprintln!("[DEBUG] Fire paused (frozen)");
                     }
                     if screen_burn {
-                        take_screenshots(&mut last_screenshot, &covered_outputs);
+                        // Spawn screenshots on background thread so UI can immediately show cleared screen
+                        let tx = screenshot_tx.clone();
+                        let covered_clone = covered_outputs.clone();
                         screenshot_count = 0;
+                        std::thread::spawn(move || {
+                            let results = take_screenshots_sync(&covered_clone);
+                            let _ = tx.send(results);
+                        });
                     }
                 }
             } else {
@@ -177,7 +200,7 @@ fn build_ui(app: &Application) {
                     }
                 }
             }
-
+            
             // Clone fire buffer for rendering
             let fire_palette = fire.palette.to_vec();
             let fire_buffer = fire.pixel_buffer.to_vec();
@@ -216,7 +239,7 @@ fn build_ui(app: &Application) {
 
             // Now create the Pixbuf from the owned pixel vector
             let pixbuf = Pixbuf::from_bytes(
-                &glib::Bytes::from_owned(pixels),
+                &gtk::glib::Bytes::from_owned(pixels),
                 Colorspace::Rgb,
                 false, // no alpha channel
                 8,     // bits per sample
@@ -228,21 +251,22 @@ fn build_ui(app: &Application) {
             // Update the GTK image widget
             picture.set_pixbuf(Some(&pixbuf));
 
-            glib::ControlFlow::Continue
+            gtk::glib::ControlFlow::Continue
         }
     });
 }
 
-fn take_screenshots(last_screenshot: &mut HashMap<String, DynamicImage>, covered_outputs: &Vec<(String, bool)>) {
+fn take_screenshots_sync(covered_outputs: &Vec<(String, bool)>) -> Vec<(String, DynamicImage)> {
+    let mut results = Vec::new();
     for (name, _covered) in covered_outputs {
         eprintln!("[DEBUG] Taking screenshot for output: {}", name);
         if let Ok(output) = std::process::Command::new("grim")
-        .args(["-o", name, "-"])
-        .output()
+            .args(["-o", name, "-"])
+            .output()
         {
             if output.status.success() {
                 if let Ok(i) = image::load_from_memory(&output.stdout) {
-                    last_screenshot.insert(name.clone(), i);
+                    results.push((name.clone(), i));
                 } else {
                     eprintln!("[DEBUG] Failed to decode screenshot for {}", name);
                 }
@@ -251,4 +275,5 @@ fn take_screenshots(last_screenshot: &mut HashMap<String, DynamicImage>, covered
             }
         }
     }
+    results
 }

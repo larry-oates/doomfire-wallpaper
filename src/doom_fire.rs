@@ -136,6 +136,5 @@ impl DoomFire {
         self.pixel_buffer.iter_mut().for_each(|x| *x = 0);
 
         self.particles.clear(); 
-        // Clear particles on reset
     }
 }
