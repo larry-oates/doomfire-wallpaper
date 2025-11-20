@@ -15,6 +15,7 @@ pub struct DoomFire {
     t: f64,
     pub particles: Vec<Particle>, // Add this field
     wind_strength: f64,
+    rng: ThreadRng,
 }
 
 impl DoomFire {
@@ -60,6 +61,7 @@ impl DoomFire {
             t: 0.0,
             particles: Vec::new(),
             wind_strength: config.wind_strength.unwrap_or(1.0),
+            rng: rand::rng(),
         };
         doom_fire.initialize_fire();
         doom_fire
@@ -118,8 +120,7 @@ impl DoomFire {
         // Initialize the bottom row
         for x in 0..self.width {
             if self.fire_type == FireType::Candy {
-                let mut rng = ThreadRng::default();
-                let rand: usize = rng.random_range(self.palette.len() / 2..self.palette.len());
+                let rand: usize = self.rng.random_range(self.palette.len() / 2..self.palette.len());
                 self.pixel_buffer[(self.height - 1) * self.width + x] = rand as u8;
             } else {
                 // For other palettes, we start with the last color in the palette

@@ -21,6 +21,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
+use std::time::{Duration, Instant};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc; // added
@@ -103,16 +104,19 @@ fn build_ui(app: &Application) {
     window.present();
 
     let mut last_screenshot: HashMap<String, DynamicImage> = HashMap::new();
-    let mut screenshot_count = -1;
     let mut was_paused = false;
+    let mut last_screenshot_time = Instant::now();
 
     // Channel to receive screenshots taken on a background thread without blocking the UI
     let (screenshot_tx, screenshot_rx) = mpsc::channel::<Vec<(String, DynamicImage)>>();
     
     let background_color = config.background.unwrap_or([0, 0, 0]);
+    // Create the pixel buffer once and reuse it to avoid re-allocation on every frame.
+    let mut pixels = vec![0u8; width * height * BYTES_PER_PIXEL];
+
     timeout_add_local(std::time::Duration::from_millis(1000 / fps as u64), {
         move || {
-            let mut fire = fire.borrow_mut();
+            let mut fire = fire.borrow_mut(); // Now only borrows mutably when needed.
 
             // Drain any screenshots that were produced by background threads
             while let Ok(batch) = screenshot_rx.try_recv() {
@@ -129,20 +133,6 @@ fn build_ui(app: &Application) {
             // Transition detection: just entered paused state
             let just_paused = paused && !was_paused;
             
-            if screen_burn && all_covered {
-                screenshot_count += 1;
-                if screenshot_count == 24 {
-                    screenshot_count = 0;
-                    // Spawn screenshots on background thread
-                    let tx = screenshot_tx.clone();
-                    let covered_clone = covered_outputs.clone();
-                    std::thread::spawn(move || {
-                        let results = take_screenshots_sync(&covered_clone);
-                        let _ = tx.send(results);
-                    });
-                }
-            }
-            
             if paused {
                 if just_paused {
                     if restart_on_pause {
@@ -151,16 +141,26 @@ fn build_ui(app: &Application) {
                     } else {
                         eprintln!("[DEBUG] Fire paused (frozen)");
                     }
-                    if screen_burn {
-                        // Spawn screenshots on background thread so UI can immediately show cleared screen
-                        let tx = screenshot_tx.clone();
-                        let covered_clone = covered_outputs.clone();
-                        screenshot_count = 0;
-                        std::thread::spawn(move || {
-                            let results = take_screenshots_sync(&covered_clone);
-                            let _ = tx.send(results);
-                        });
-                    }
+                }
+
+                // While paused, take screenshots periodically.
+                if screen_burn && last_screenshot_time.elapsed() >= Duration::from_millis(500) {
+                    last_screenshot_time = Instant::now();
+                    eprintln!("[DEBUG] Taking screenshot while paused");
+                    // Spawn screenshots on background thread
+                    let tx = screenshot_tx.clone();
+                    rayon::spawn(move || {
+                        let results = take_screenshots_sync(&get_outputs_covered());
+                        let _ = tx.send(results);
+                    });
+                }
+
+                was_paused = paused;
+                if just_paused {
+                    // Force a redraw to show the paused state (e.g., cleared screen)
+                } else {
+                    // Nothing has changed, so we can skip rendering completely.
+                    return gtk::glib::ControlFlow::Continue;
                 }
             } else {
                 if was_paused {
@@ -169,9 +169,8 @@ fn build_ui(app: &Application) {
                         fire.initialize_fire();
                     }
                 }
-                fire.update();
+                fire.update(); // Update the fire state.
             }
-            was_paused = paused;
             
             if screen_burn {
                 if let Some((name, _)) = covered_outputs.iter().find(|(_, c)| !*c) {
@@ -201,45 +200,42 @@ fn build_ui(app: &Application) {
                 }
             }
             
+            was_paused = paused;
             // Clone fire buffer for rendering
-            let fire_palette = fire.palette.to_vec();
-            let fire_buffer = fire.pixel_buffer.to_vec();
-            let fire_width = fire.width;
-            let fire_height = fire.height;
+            {
+                // This block contains the rendering logic.
+                // It uses an immutable borrow of `fire` which is released at the end of the block.
+                let fire_palette = &fire.palette;
+                let fire_buffer = &fire.pixel_buffer;
+                let fire_width = fire.width;
+                let fire_height = fire.height;
 
-            let pixels = {
-                let mut buffer = vec![0u8; width * height * BYTES_PER_PIXEL];
-                buffer
-                    .par_chunks_mut(width * BYTES_PER_PIXEL)
-                    .enumerate()
-                    .for_each(|(wy, row)| {
-                        let fy = wy / scale;
-                        if fy < fire_height {
-                            for fx in 0..fire_width {
-                                let idx = fire_buffer[fy * fire_width + fx] as usize;
-                                let color = fire_palette[idx];
-                                let start_wx = fx * scale;
-                                let end_wx = ((fx + 1) * scale).min(width);
+                pixels
+                .par_chunks_mut(width * BYTES_PER_PIXEL)
+                .enumerate()
+                .for_each(|(wy, row)| {
+                    let fy = wy / scale;
+                    if fy < fire_height {
+                        for fx in 0..fire_width {
+                            let idx = fire_buffer[fy * fire_width + fx] as usize;
+                            let color = fire_palette[idx];
+                            let start_wx = fx * scale;
+                            let end_wx = ((fx + 1) * scale).min(width);
 
-                                let slice_start = start_wx * BYTES_PER_PIXEL;
-                                let slice_end = end_wx * BYTES_PER_PIXEL;
+                            let slice_start = start_wx * BYTES_PER_PIXEL;
+                            let slice_end = end_wx * BYTES_PER_PIXEL;
 
-                                if slice_end <= row.len() {
-                                    for pixel_chunk in
-                                        row[slice_start..slice_end].chunks_exact_mut(BYTES_PER_PIXEL)
-                                    {
-                                        pixel_chunk.copy_from_slice(&color);
-                                    }
-                                }
+                            if slice_end <= row.len() {
+                                row[slice_start..slice_end].copy_from_slice(&color.repeat(end_wx - start_wx));
                             }
                         }
-                    });
-                buffer
-            };
+                    }
+                });
+            }
 
             // Now create the Pixbuf from the owned pixel vector
             let pixbuf = Pixbuf::from_bytes(
-                &gtk::glib::Bytes::from_owned(pixels),
+                &gtk::glib::Bytes::from_owned(pixels.clone()),
                 Colorspace::Rgb,
                 false, // no alpha channel
                 8,     // bits per sample
