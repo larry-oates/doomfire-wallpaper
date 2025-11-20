@@ -21,6 +21,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
+use std::env;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc; // added
@@ -101,6 +102,46 @@ fn build_ui(app: &Application) {
     let picture = Picture::new();
     window.set_child(Some(&picture));
     window.present();
+
+    // --- Portability Layer ---
+    let session_type = env::var("XDG_SESSION_TYPE").unwrap_or_default();
+    println!("[INFO] Detected session type: {}", session_type);
+
+    match session_type.as_str() {
+        "wayland" => {
+            #[cfg(feature = "wayland")]
+            {
+                // For wlroots-based compositors (Sway, Hyprland)
+                println!("[INFO] Attempting to use gtk4-layer-shell for Wayland.");
+                gtk4_layer_shell::init_for_window(&window);
+                gtk4_layer_shell::set_layer(&window, gtk4_layer_shell::Layer::Background);
+                gtk4_layer_shell::set_keyboard_interactivity(&window, false);
+                // Set anchor to all sides to fill the screen
+                gtk4_layer_shell::set_anchor(&window, gtk4_layer_shell::Edge::Left, true);
+                gtk4_layer_shell::set_anchor(&window, gtk4_layer_shell::Edge::Right, true);
+                gtk4_layer_shell::set_anchor(&window, gtk4_layer_shell::Edge::Top, true);
+                gtk4_layer_shell::set_anchor(&window, gtk4_layer_shell::Edge::Bottom, true);
+                println!("[INFO] Configured for wlroots-based Wayland compositor.");
+            }
+            #[cfg(not(feature = "wayland"))]
+            {
+                eprintln!("[WARN] Running on Wayland, but not compiled with 'wayland' feature. The window may not act as a wallpaper.");
+                eprintln!("[WARN] For Hyprland/Sway, recompile with: cargo build --release --features wayland");
+            }
+        }
+        "x11" => {
+            #[cfg(feature = "x11")]
+            {
+                // For X11, print the window ID so xwinwrap can use it.
+                use gtk::gdk_x11::X11GdkWindowExt;
+                let xid = window.native().unwrap().xid().unwrap();
+                println!("[INFO] X11 Window ID (XID): {}", xid);
+            }
+        }
+        _ => {
+            eprintln!("[WARN] Unknown or unsupported session type: '{}'. The window may not act as a wallpaper.", session_type);
+        }
+    }
 
     let mut last_screenshot: HashMap<String, DynamicImage> = HashMap::new();
     let mut screenshot_count = -1;

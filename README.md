@@ -1,10 +1,9 @@
-# DOOM-style fire wallpaper for Hyprpaper
+-- DOOM-style fire wallpaper for Linux --
 
 Want to use a [fire from DOOM](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper in Arch linux?  
 
 This project generates an animated fire effect in real-time and displays it in a GTK4 window.  
-Setting this as your wallpaper depends on your compositor, currently there is only a guide for Hyprland using Hyprwinwrap  
-*if you want it for another please raise an issue! [XWinWrap](https://github.com/mmhobi7/xwinwrap) could potentially work for a X11 setup*
+It can be used as a wallpaper on various Linux desktop environments, including KDE Plasma, GNOME, and wlroots-based compositors like Hyprland and Sway.
 
 ---
 
@@ -19,43 +18,69 @@ Setting this as your wallpaper depends on your compositor, currently there is on
 ---
 
 ## Requirements
-
-- **Linux** (Wayland, with Hyprland and Hyprwinwrap)
-- [Rust/cargo](https://rust-lang.org/) (edition 2021)
-- [Hyprwinwrap](https://aur.archlinux.org/packages/hyprland-plugin-hyprwinwrap) - running and configured (as described below)
+- **Linux** (Wayland or X11)
+- **Rust/Cargo**
+- **For X11 users (KDE Plasma on X11, GNOME on X11, XFCE, etc.):**
+  - `xwinwrap`: A tool to pin a window to the desktop background.
+  - `wmctrl` (optional, for scripting).
+- **For Hyprland/Sway users (Wayland):**
+  - No extra tools needed if compiled with the `wayland` feature.
 
 ---
 
 ## Installation
 
-1. **Install with Yay:**
+### Arch Linux (AUR)
 
-  ```sh
-  yay -Sy doomfire-wallpaper
-  ```
+You can install the package from the Arch User Repository using an AUR helper like `yay` or `paru`:
+```sh
+yay -S doomfire-wallpaper
+```
 
-  **Or Make package manually**
-  
-  ```sh
-  git clone --recurse-submodules https://github.com/larry-oates/doomfire-wallpaper.git
-  cd doomfire-wallpaper
-  makepkg -Cfsri
-  ```
+### From Source
 
-2. **Set up hyprwinwrap**
+1.  **Clone the repository:**
+    ```sh
+    git clone https://github.com/larry-oates/doomfire-wallpaper.git
+    cd doomfire-wallpaper/doomfire_wallpaper
+    ```
 
-  **Make sure [Hyprwinwrap](https://github.com/hyprwm/hyprland-plugins) is enabled and running in your Hyprland session.**  
-  Add this to your hyprland.conf:
+2.  **Compile for your environment:**
 
-  ```
-    plugin {
-      hyprwinwrap {
-        class = com.leafman.doomfirewallpaper
-      }
-    }
-  ```
+    -   **For Wayland (Hyprland, Sway):**
+        ```sh
+        cargo build --release --features wayland
+        ```
+    -   **For X11 (KDE Plasma, GNOME on X11, XFCE):**
+        ```sh
+        cargo build --release --features x11
+        ```
 
-3. **Run the wallpaper on startup!**
+3.  **Run the wallpaper:**
+
+    -   **On Hyprland/Sway (Wayland):**
+        Just run the binary. It will automatically use the layer-shell protocol to become a wallpaper.
+        ```sh
+        ./target/release/doomfire-wallpaper &
+        ```
+        or on arch:
+        ```sh
+                doomfire-wallpaper &
+        ```
+        
+
+    -   **On KDE Plasma / other X11 Desktops:**
+        You need to use `xwinwrap`. First, install it from your distribution's repositories (e.g., `sudo apt install xwinwrap` or `yay -S xwinwrap-git`).
+        Then, run the wallpaper through it:
+        ```sh
+        xwinwrap -g 1920x1080 -ov -ni -- ./target/release/doomfire-wallpaper &
+        ```
+        *(Replace `1920x1080` with your screen resolution)*.
+
+    -   **On KDE Plasma / GNOME (Wayland):**
+        This is experimental. There is no standard way to force a window to the background. Running the binary will create a borderless window, but it may not behave like a true wallpaper.
+
+4.  **(Optional) Add it to your startup applications** to run it automatically when you log in.
 
 
 ---
@@ -111,10 +136,9 @@ dfpaper refresh
 ---
 
 ## How it Works
-
-- The program generates a new frame and then saves it as a WebP image in `~/.cache/hyprpaper/doomfire.webp`.
-- It  tells Hyprpaper to reload the wallpaper using `hyprctl`.
-- This loop runs at your chosen FPS, creating a smooth animated effect.
+- **On wlroots (Hyprland/Sway):** The app uses the `wlr-layer-shell` protocol to create a window on the background layer, turning it into a true wallpaper.
+- **On X11 (KDE, XFCE):** The app is launched via `xwinwrap`, which embeds the app's window into the desktop's root X window.
+- **On other Wayland compositors (KDE, GNOME):** A borderless window is created. True wallpaper integration is not possible without compositor-specific plugins.
 - When all monitors contain a client window or the system is dormant, the animation will be paused to save CPU utilization.
 - If `restart_on_pause` is set to `true`, the animation restarts from the beginning after a pause; if `false`, it resumes where it left off.
 - If `screen_burn` is set to `true` a screen shot is taken every 100 ms using grim, converted to greyscale
@@ -124,8 +148,8 @@ and applied to the background when the last window on a screen is closed
 
 ## Troubleshooting
 
-- **Wallpaper not updating?**  
-  Make sure Hyprpaper is running and you have no other programs managing your wallpaper (e.g. [waypaper](https://github.com/anufrievroman/waypaper)).
+- **On X11, the wallpaper is in a normal window?**
+  Make sure you are launching it through `xwinwrap`.
 - **Performance issues?**  
   Increase the `scale` value or lower the resolution/FPS.
 - **Multiple monitors?**  
