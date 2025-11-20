@@ -1,6 +1,8 @@
 # DOOM-style fire wallpaper for Hyprpaper
 
-Want to use a [fire from DOOM](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper in Arch linux?  
+Want to use a [fire from DOOM](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper in Arch linux? 
+
+![Doomfire wallpaper demo](./Demo.mp4)
 
 This project generates an animated fire effect in real-time and displays it in a GTK4 window.  
 Setting this as your wallpaper depends on your compositor, currently there is only a guide for Hyprland using Hyprwinwrap  
