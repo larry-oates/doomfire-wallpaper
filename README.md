@@ -1,4 +1,4 @@
-# DOOM inspired fire wallpaper for Hyprpaper
+# DOOM inspired fire wallpaper for Wayland
 
 Want to use a [fire from DOOM](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper in Arch linux? 
 
