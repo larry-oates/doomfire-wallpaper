@@ -16,6 +16,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            build-essential \
+            libwayland-dev \
+            wayland-protocols \
+            libgirepository1.0-dev
+      
+      - name: Install gtk4-layer-shell
+        run: |
+          sudo apt-get install -y \
+            meson \
+            ninja-build
+          git clone https://github.com/wmww/gtk4-layer-shell.git
+          cd gtk4-layer-shell
+          meson setup build
+          sudo ninja -C build install
+          sudo ldconfig
+      
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       
@@ -32,7 +53,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: doomfire-wallpaper-*.tar.gz
-          draft: false
-          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
