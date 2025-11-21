@@ -32,7 +32,7 @@ Setting this as your wallpaper depends on your compositor, currently there is on
 
 1. **Install with Yay:**
 
-  Install a prebuilt binary for X86 (faster):
+  Install a prebuilt binary for X86 ( much faster ):
   ```sh
   yay -Sy doomfire-wallpaper-bin
   ```
