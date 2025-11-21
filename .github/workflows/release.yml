@@ -24,13 +24,13 @@ jobs:
             build-essential \
             libwayland-dev \
             wayland-protocols \
-            libgirepository1.0-dev
+            libgirepository1.0-dev \
+            valac \
+            meson \
+            ninja-build
       
       - name: Install gtk4-layer-shell
         run: |
-          sudo apt-get install -y \
-            meson \
-            ninja-build
           git clone https://github.com/wmww/gtk4-layer-shell.git
           cd gtk4-layer-shell
           meson setup build
