@@ -25,6 +25,7 @@ Setting this as your wallpaper depends on your compositor, currently there is on
 - **Linux** (Wayland, with Hyprland and Hyprwinwrap)
 - [Rust/cargo](https://rust-lang.org/) (edition 2021)
 - [Hyprwinwrap](https://aur.archlinux.org/packages/hyprland-plugin-hyprwinwrap) - running and configured (as described below)
+- [grim](https://github.com/emersion/grim) - Optionally needed if you want to use the 'screen burn' feature
 
 ---
 
