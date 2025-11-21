@@ -148,7 +148,6 @@ and applied to the background when the last window on a screen is closed
 - Fire algorithm inspired by [Fabien Sanglard's DOOM fire article](https://fabiensanglard.net/doom_fire_psx/).
 - [Hyprpaper](https://github.com/hyprwm/hyprpaper) for dynamic wallpaper support.
 - [rayon](https://crates.io/crates/rayon) for parallel rendering.
-- [Larry's DOOM fire wallpaper](https://github.com/Leafmun-certii/arch_linux_doom_fire_wallpaper)
 
 ---
 
