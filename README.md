@@ -37,15 +37,15 @@ Setting this as your wallpaper depends on your compositor, currently there is on
   ```sh
   yay -Sy doomfire-wallpaper-bin
   ```
-  Or build on your PC:
+  Or build using your PC:
   ```sh
-  yay -Sy doomfire-wallpaper-bin
+  yay -Sy doomfire-wallpaper
   ```
 
   **Or Make package manually**
   
   ```sh
-  git clone --recurse-submodules https://github.com/larry-oates/doomfire-wallpaper.git
+  git clone https://github.com/larry-oates/doomfire-wallpaper.git
   cd doomfire-wallpaper
   makepkg -Cfsri
   ```
