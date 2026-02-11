@@ -12,6 +12,7 @@ pub struct Config {
     pub pause_on_cover: Option<bool>,
     pub screen_burn: Option<bool>,
     pub wind_strength: Option<f64>,
+    pub show_fps: Option<bool>,
 }
 
 impl Config {
@@ -33,6 +34,7 @@ impl Config {
             pause_on_cover: config.pause_on_cover.or(default.pause_on_cover),
             screen_burn: config.screen_burn.or(default.screen_burn),
             wind_strength: config.wind_strength.or(default.wind_strength),
+            show_fps: config.show_fps.or(default.show_fps),
         }
     }
 }
@@ -50,6 +52,7 @@ impl Default for Config {
             pause_on_cover: Some(true),
             screen_burn: Some(false), // Default: disabled
             wind_strength: Some(0.5),
+            show_fps: Some(false),
         }
     }
 }

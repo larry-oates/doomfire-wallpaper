@@ -28,6 +28,19 @@ use std::sync::mpsc; // added
 
 const BYTES_PER_PIXEL: usize = 3; // RGB = 3 bytes
 
+const FONT: [[[u8; 3]; 5]; 10] = [
+    [[1, 1, 1], [1, 0, 1], [1, 0, 1], [1, 0, 1], [1, 1, 1]], // 0
+    [[0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0], [0, 1, 0]], // 1
+    [[1, 1, 1], [0, 0, 1], [1, 1, 1], [1, 0, 0], [1, 1, 1]], // 2
+    [[1, 1, 1], [0, 0, 1], [1, 1, 1], [0, 0, 1], [1, 1, 1]], // 3
+    [[1, 0, 1], [1, 0, 1], [1, 1, 1], [0, 0, 1], [0, 0, 1]], // 4
+    [[1, 1, 1], [1, 0, 0], [1, 1, 1], [0, 0, 1], [1, 1, 1]], // 5
+    [[1, 1, 1], [1, 0, 0], [1, 1, 1], [1, 0, 1], [1, 1, 1]], // 6
+    [[1, 1, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1]], // 7
+    [[1, 1, 1], [1, 0, 1], [1, 1, 1], [1, 0, 1], [1, 1, 1]], // 8
+    [[1, 1, 1], [1, 0, 1], [1, 1, 1], [0, 0, 1], [1, 1, 1]], // 9
+];
+
 fn main() -> Result<()> {
     run_wallpaper()
 }
@@ -67,6 +80,7 @@ fire_type = "Original"
 # pause_on_cover = true
 # screen_burn = false
 # wind_strength = 0.5
+# show_fps = false
 "#;
 
 /// Runs the GTK application and the wallpaper animation loop.
@@ -90,6 +104,7 @@ fn build_ui(app: &Application) {
     let fps = config.fps.unwrap_or(10);
     let pause_on_cover = config.pause_on_cover.unwrap_or(false);
     let screen_burn = config.screen_burn.unwrap_or(false);
+    let show_fps = config.show_fps.unwrap_or(false);
     let height = config.screen_height.unwrap();
     let width = config.screen_width.unwrap();
     let scale = config.scale.unwrap_or(1);
@@ -106,6 +121,9 @@ fn build_ui(app: &Application) {
     let mut last_screenshot: HashMap<String, DynamicImage> = HashMap::new();
     let mut was_paused = false;
     let mut last_screenshot_time = Instant::now();
+    let mut frame_count = 0;
+    let mut current_fps = 0;
+    let mut last_fps_update = Instant::now();
 
     // Channel to receive screenshots taken on a background thread without blocking the UI
     let (screenshot_tx, screenshot_rx) = mpsc::channel::<Vec<(String, DynamicImage)>>();
@@ -117,6 +135,15 @@ fn build_ui(app: &Application) {
     timeout_add_local(std::time::Duration::from_millis(1000 / fps as u64), {
         move || {
             let mut fire = fire.borrow_mut(); // Now only borrows mutably when needed.
+
+            if show_fps {
+                frame_count += 1;
+                if last_fps_update.elapsed() >= Duration::from_secs(1) {
+                    current_fps = frame_count;
+                    frame_count = 0;
+                    last_fps_update = Instant::now();
+                }
+            }
 
             // Drain any screenshots that were produced by background threads
             while let Ok(batch) = screenshot_rx.try_recv() {
@@ -170,6 +197,9 @@ fn build_ui(app: &Application) {
                     }
                 }
                 fire.update(); // Update the fire state.
+                if show_fps {
+                    draw_fps(&mut fire, current_fps);
+                }
             }
             
             if screen_burn {
@@ -272,4 +302,45 @@ fn take_screenshots_sync(covered_outputs: &Vec<(String, bool)>) -> Vec<(String, 
         }
     }
     results
+}
+
+fn draw_fps(fire: &mut DoomFire, fps: u32) {
+    let fps_str = fps.to_string();
+    let char_width = 3;
+    let char_height = 5;
+    let spacing = 1;
+    let padding_right = 5;
+    let padding_top = 20;
+
+    let total_width = fps_str.len() * (char_width + spacing) - spacing;
+
+    if fire.width < total_width + padding_right {
+        return;
+    }
+
+    let start_x = fire.width - total_width - padding_right;
+    let start_y = padding_top;
+    let max_heat = if fire.palette.is_empty() {
+        255
+    } else {
+        (fire.palette.len() - 1) as u8
+    };
+
+    for (i, c) in fps_str.chars().enumerate() {
+        if let Some(digit) = c.to_digit(10) {
+            let digit = digit as usize;
+            let offset_x = start_x + i * (char_width + spacing);
+            for dy in 0..char_height {
+                for dx in 0..char_width {
+                    if FONT[digit][dy][dx] == 1 {
+                        let x = offset_x + dx;
+                        let y = start_y + dy;
+                        if y < fire.height && x < fire.width {
+                            fire.pixel_buffer[y * fire.width + x] = max_heat;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
