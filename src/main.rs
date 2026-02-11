@@ -6,7 +6,7 @@ pub mod config;
 pub mod fire_types;
 pub mod particle;
 
-use crate::config::Config;
+use crate::config::{Config, ScreenBurn};
 use crate::doom_fire::DoomFire;
 use crate::wallpaper::{get_outputs_covered, is_system_sleeping};
 use anyhow::{Context, Result};
@@ -78,7 +78,8 @@ fire_type = "Original"
 # background = [0, 0, 0]
 # restart_on_pause = true
 # pause_on_cover = true
-# screen_burn = false
+# screen_burn = false # true, false, or "image"
+# image_path = "/path/to/image.png"
 # wind_strength = 0.5
 # show_fps = false
 "#;
@@ -103,7 +104,7 @@ fn build_ui(app: &Application) {
     let restart_on_pause = config.restart_on_pause.unwrap_or(false);
     let fps = config.fps.unwrap_or(10);
     let pause_on_cover = config.pause_on_cover.unwrap_or(false);
-    let screen_burn = config.screen_burn.unwrap_or(false);
+    let screen_burn_config = config.screen_burn.unwrap_or(ScreenBurn::Bool(false));
     let show_fps = config.show_fps.unwrap_or(false);
     let height = config.screen_height.unwrap();
     let width = config.screen_width.unwrap();
@@ -132,6 +133,27 @@ fn build_ui(app: &Application) {
     // Create the pixel buffer once and reuse it to avoid re-allocation on every frame.
     let mut pixels = vec![0u8; width * height * BYTES_PER_PIXEL];
 
+    // Load background image if provided
+    let bg_image = if let Some(path_str) = &config.image_path {
+        let path = resolve_path(path_str);
+        match image::open(&path) {
+            Ok(img) => Some(img.resize_exact(width as u32, height as u32, image::imageops::FilterType::Triangle)),
+            Err(e) => {
+                eprintln!("Failed to load image at {:?}: {}", path, e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    
+    // Convert bg_image to raw bytes for faster access in the render loop
+    let bg_image_bytes = bg_image.as_ref().map(|img| img.to_rgb8().into_raw());
+
+    let use_static_burn_image = matches!(screen_burn_config, ScreenBurn::String(ref s) if s == "image");
+    let do_screen_burn = use_static_burn_image || matches!(screen_burn_config, ScreenBurn::Bool(true));
+    let show_bg_image = !do_screen_burn && bg_image.is_some();
+
     timeout_add_local(std::time::Duration::from_millis(1000 / fps as u64), {
         move || {
             let mut fire = fire.borrow_mut(); // Now only borrows mutably when needed.
@@ -157,6 +179,16 @@ fn build_ui(app: &Application) {
             let sleeping = is_system_sleeping();
             let paused = (pause_on_cover && all_covered) || sleeping;
 
+            if use_static_burn_image {
+                if let Some(img) = &bg_image {
+                    for (name, covered) in &covered_outputs {
+                        if *covered && !last_screenshot.contains_key(name) {
+                            last_screenshot.insert(name.clone(), img.clone());
+                        }
+                    }
+                }
+            }
+
             // Transition detection: just entered paused state
             let just_paused = paused && !was_paused;
             
@@ -171,15 +203,17 @@ fn build_ui(app: &Application) {
                 }
 
                 // While paused, take screenshots periodically.
-                if screen_burn && last_screenshot_time.elapsed() >= Duration::from_millis(500) {
-                    last_screenshot_time = Instant::now();
-                    eprintln!("[DEBUG] Taking screenshot while paused");
-                    // Spawn screenshots on background thread
-                    let tx = screenshot_tx.clone();
-                    rayon::spawn(move || {
-                        let results = take_screenshots_sync(&get_outputs_covered());
-                        let _ = tx.send(results);
-                    });
+                if do_screen_burn {
+                    if !use_static_burn_image && last_screenshot_time.elapsed() >= Duration::from_millis(500) {
+                        last_screenshot_time = Instant::now();
+                        eprintln!("[DEBUG] Taking screenshot while paused");
+                        // Spawn screenshots on background thread
+                        let tx = screenshot_tx.clone();
+                        rayon::spawn(move || {
+                            let results = take_screenshots_sync(&get_outputs_covered());
+                            let _ = tx.send(results);
+                        });
+                    }
                 }
 
                 was_paused = paused;
@@ -202,7 +236,7 @@ fn build_ui(app: &Application) {
                 }
             }
             
-            if screen_burn {
+            if do_screen_burn {
                 if let Some((name, _)) = covered_outputs.iter().find(|(_, c)| !*c) {
                     if let Some(img) = last_screenshot.remove(name) {
                         last_screenshot.clear();
@@ -256,7 +290,15 @@ fn build_ui(app: &Application) {
                             let slice_end = end_wx * BYTES_PER_PIXEL;
 
                             if slice_end <= row.len() {
-                                row[slice_start..slice_end].copy_from_slice(&color.repeat(end_wx - start_wx));
+                                if show_bg_image && idx == 0 {
+                                    if let Some(bg_bytes) = &bg_image_bytes {
+                                        let bg_row_start = wy * width * BYTES_PER_PIXEL;
+                                        let bg_slice = &bg_bytes[bg_row_start + slice_start .. bg_row_start + slice_end];
+                                        row[slice_start..slice_end].copy_from_slice(bg_slice);
+                                    }
+                                } else {
+                                    row[slice_start..slice_end].copy_from_slice(&color.repeat(end_wx - start_wx));
+                                }
                             }
                         }
                     }
@@ -343,4 +385,13 @@ fn draw_fps(fire: &mut DoomFire, fps: u32) {
             }
         }
     }
+}
+
+fn resolve_path(path: &str) -> PathBuf {
+    if let Some(stripped) = path.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(stripped);
+        }
+    }
+    PathBuf::from(path)
 }

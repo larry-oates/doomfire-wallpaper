@@ -1,5 +1,12 @@
 use serde::Deserialize;
 
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum ScreenBurn {
+    Bool(bool),
+    String(String),
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub screen_width: Option<usize>,
@@ -10,9 +17,10 @@ pub struct Config {
     pub background: Option<[u8; 3]>,
     pub restart_on_pause: Option<bool>,
     pub pause_on_cover: Option<bool>,
-    pub screen_burn: Option<bool>,
+    pub screen_burn: Option<ScreenBurn>,
     pub wind_strength: Option<f64>,
     pub show_fps: Option<bool>,
+    pub image_path: Option<String>,
 }
 
 impl Config {
@@ -35,6 +43,7 @@ impl Config {
             screen_burn: config.screen_burn.or(default.screen_burn),
             wind_strength: config.wind_strength.or(default.wind_strength),
             show_fps: config.show_fps.or(default.show_fps),
+            image_path: config.image_path.or(default.image_path),
         }
     }
 }
@@ -50,9 +59,10 @@ impl Default for Config {
             background: None,
             restart_on_pause: Some(true),
             pause_on_cover: Some(true),
-            screen_burn: Some(false), // Default: disabled
+            screen_burn: Some(ScreenBurn::Bool(false)), // Default: disabled
             wind_strength: Some(0.5),
             show_fps: Some(false),
+            image_path: None,
         }
     }
 }

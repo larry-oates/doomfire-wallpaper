@@ -1,4 +1,4 @@
-# DOOM-style fire wallpaper for Hyprpaper
+# DOOM-style fire wallpaper for Hyprland
 
 Want to use a [fire from DOOM](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper in Arch linux? 
 
@@ -77,12 +77,12 @@ screen_width = 1920
 screen_height = 1080
 scale = 4
 fps = 23
-output = ""
 fire_type = "Original"    # See fire type section below for options
 background = [0, 0, 0]  # Optional: RGB array, e.g. [20, 20, 20] for dark grey
 restart_on_pause = true # Optional: true (default) or false, controls if animation restarts after pause. 
 pause_on_cover = true   # Optional: true (default) pauses animation when all screens contain a window; set to false to keep animating even when covered
-screen_burn = false # Optional: false (default). If true, when a screen is uncovered, that screen will turn to fire
+screen_burn = false # Optional: false (default), true, or "image". If true, closing windows leaves a burning trail. If "image", the image_path is used for the burn effect.
+image_path = "/path/to/image.png" # Optional: Path to an image. Used for "image" screen_burn mode, or as a static background if screen_burn is false.
 show_fps = false # Optional: false (default). If true, displays FPS counter in top right
 
 ```
@@ -92,10 +92,6 @@ show_fps = false # Optional: false (default). If true, displays FPS counter in t
 ### Applying Config Changes
 
 After you change the configuration **you must restart the wallpaper service for changes to take effect**:
-
-```sh
-dfpaper refresh
-```
 
 ### Fire Types
 
@@ -119,26 +115,12 @@ dfpaper refresh
 
 ---
 
-## How it Works
-
-- The program generates a new frame and then saves it as a WebP image in `~/.cache/hyprpaper/doomfire.webp`.
-- It  tells Hyprpaper to reload the wallpaper using `hyprctl`.
-- This loop runs at your chosen FPS, creating a smooth animated effect.
-- When all monitors contain a client window or the system is dormant, the animation will be paused to save CPU utilization.
-- If `restart_on_pause` is set to `true`, the animation restarts from the beginning after a pause; if `false`, it resumes where it left off.
-- If `screen_burn` is set to `true` a screen shot is taken every 100 ms using grim, converted to greyscale
-and applied to the background when the last window on a screen is closed
-
----
-
 ## Troubleshooting
 
 - **Wallpaper not updating?**  
-  Make sure Hyprpaper is running and you have no other programs managing your wallpaper (e.g. [waypaper](https://github.com/anufrievroman/waypaper)).
+  Make sure you have no other programs managing your wallpaper (e.g. [waypaper](https://github.com/anufrievroman/waypaper)).
 - **Performance issues?**  
   Increase the `scale` value or lower the resolution/FPS.
-- **Multiple monitors?**  
-  Set the `output` variable to your desired monitor name (see `wlr-randr` or `hyprctl monitors`).
 - **Flickering animation?**  
   Disable any system animations (see [Hyprland animation docs](https://wiki.hypr.land/Configuring/Animations/)).
 
