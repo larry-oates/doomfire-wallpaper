@@ -11,8 +11,6 @@ use crate::doom_fire::DoomFire;
 use crate::wallpaper::{get_outputs_covered, is_system_sleeping};
 use anyhow::{Context, Result};
 use gtk4 as gtk;
-use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
-use gtk::glib::source::timeout_add_local;
 use gtk::prelude::*;
 use gtk::{Application, ApplicationWindow, Picture};
 use image::{DynamicImage, GenericImageView};
@@ -21,10 +19,10 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
+use std::rc::Rc;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::path::PathBuf;
-use std::rc::Rc;
-use std::sync::mpsc; // added
 
 const BYTES_PER_PIXEL: usize = 3; // RGB = 3 bytes
 
@@ -34,7 +32,7 @@ const FONT: [[[u8; 3]; 5]; 10] = [
     [[1, 1, 1], [0, 0, 1], [1, 1, 1], [1, 0, 0], [1, 1, 1]], // 2
     [[1, 1, 1], [0, 0, 1], [1, 1, 1], [0, 0, 1], [1, 1, 1]], // 3
     [[1, 0, 1], [1, 0, 1], [1, 1, 1], [0, 0, 1], [0, 0, 1]], // 4
-    [[1, 1, 1], [1, 0, 0], [1, 1, 1], [0, 0, 1], [1, 1, 1]], // 5
+    [[1, 1, 1], [1, 0, 0], [1, 1, 1], [1, 0, 1], [1, 1, 1]], // 5
     [[1, 1, 1], [1, 0, 0], [1, 1, 1], [1, 0, 1], [1, 1, 1]], // 6
     [[1, 1, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1], [0, 0, 1]], // 7
     [[1, 1, 1], [1, 0, 1], [1, 1, 1], [1, 0, 1], [1, 1, 1]], // 8
@@ -84,9 +82,51 @@ fire_type = "Original"
 # show_fps = false
 "#;
 
+/// Commands sent from the UI loop to the render worker.
+enum FireCommand {
+    /// Pause the fire. `clear` empties the fire (restart_on_pause),
+    /// `burn` is an optional screenshot to burn into the frame. Renders once.
+    Pause {
+        clear: bool,
+        burn: Option<DynamicImage>,
+    },
+    /// Advance and render one fire frame.
+    Update {
+        init: bool,
+        burn: Option<DynamicImage>,
+        fps_value: u32,
+    },
+}
+
+/// UI-side state shared with the frame-clock tick callback (which requires a
+/// `Fn` closure, so mutation is behind Rc<RefCell<_>>).
+struct UiState {
+    last_screenshot: HashMap<String, DynamicImage>,
+    was_paused: bool,
+    last_screenshot_time: Instant,
+    frame_count: u32,
+    current_fps: u32,
+    last_fps_update: Instant,
+    cached_outputs: Vec<(String, bool)>,
+    last_output_check: Instant,
+    sleeping: bool,
+    last_sleep_check: Instant,
+    vsync_credit: f64,
+}
+
 /// Runs the GTK application and the wallpaper animation loop.
 fn run_wallpaper() -> Result<()> {
     ensure_config_exists()?;
+
+    // The default GSK renderer (Vulkan-capable) cannot repaint a full-screen
+    // 6MB texture per frame within the vsync budget on this setup, starving
+    // the frame clock and causing stutter. Force the OpenGL renderer, which
+    // handles this comfortably.
+    if std::env::var_os("GSK_RENDERER").is_none() {
+        // Safe: no other threads are running yet.
+        let gl = if gtk::minor_version() >= 16 { "gl" } else { "ngl" };
+        unsafe { std::env::set_var("GSK_RENDERER", gl) };
+    }
 
     let app = Application::new(Some("com.leafman.doomfirewallpaper"), Default::default());
     app.connect_activate(build_ui);
@@ -99,16 +139,19 @@ fn build_ui(app: &Application) {
     println!("App Connected!");
     let config = Config::load();
     println!("Using config: {:?}", config);
-    let fire = Rc::new(RefCell::new(DoomFire::new(&config)));
 
     let restart_on_pause = config.restart_on_pause.unwrap_or(false);
     let fps = config.fps.unwrap_or(10);
     let pause_on_cover = config.pause_on_cover.unwrap_or(false);
-    let screen_burn_config = config.screen_burn.unwrap_or(ScreenBurn::Bool(false));
+    let screen_burn_config = config.screen_burn.clone().unwrap_or(ScreenBurn::Bool(false));
     let show_fps = config.show_fps.unwrap_or(false);
     let height = config.screen_height.unwrap();
     let width = config.screen_width.unwrap();
     let scale = config.scale.unwrap_or(1);
+    let background_color = config.background.unwrap_or([0, 0, 0]);
+
+    let use_static_burn_image = matches!(screen_burn_config, ScreenBurn::String(ref s) if s == "image");
+    let do_screen_burn = use_static_burn_image || matches!(screen_burn_config, ScreenBurn::Bool(true));
 
     let window = ApplicationWindow::builder()
         .application(app)
@@ -118,20 +161,6 @@ fn build_ui(app: &Application) {
     let picture = Picture::new();
     window.set_child(Some(&picture));
     window.present();
-
-    let mut last_screenshot: HashMap<String, DynamicImage> = HashMap::new();
-    let mut was_paused = false;
-    let mut last_screenshot_time = Instant::now();
-    let mut frame_count = 0;
-    let mut current_fps = 0;
-    let mut last_fps_update = Instant::now();
-
-    // Channel to receive screenshots taken on a background thread without blocking the UI
-    let (screenshot_tx, screenshot_rx) = mpsc::channel::<Vec<(String, DynamicImage)>>();
-    
-    let background_color = config.background.unwrap_or([0, 0, 0]);
-    // Create the pixel buffer once and reuse it to avoid re-allocation on every frame.
-    let mut pixels = vec![0u8; width * height * BYTES_PER_PIXEL];
 
     // Load background image if provided
     let bg_image = if let Some(path_str) = &config.image_path {
@@ -146,182 +175,326 @@ fn build_ui(app: &Application) {
     } else {
         None
     };
-    
+
     // Convert bg_image to raw bytes for faster access in the render loop
     let bg_image_bytes = bg_image.as_ref().map(|img| img.to_rgb8().into_raw());
+    // Keep a copy for the static burn-in screenshot handling on the UI thread
+    let bg_image_main = bg_image;
+    let show_bg_image = !do_screen_burn && bg_image_main.is_some();
 
-    let use_static_burn_image = matches!(screen_burn_config, ScreenBurn::String(ref s) if s == "image");
-    let do_screen_burn = use_static_burn_image || matches!(screen_burn_config, ScreenBurn::Bool(true));
-    let show_bg_image = !do_screen_burn && bg_image.is_some();
+    // Channel to receive screenshots taken on a background thread without blocking the UI
+    let (screenshot_tx, screenshot_rx) = mpsc::channel::<Vec<(String, DynamicImage)>>();
 
-    timeout_add_local(std::time::Duration::from_millis(1000 / fps as u64), {
-        move || {
-            let mut fire = fire.borrow_mut(); // Now only borrows mutably when needed.
+    // Move fire simulation + rendering off the UI thread. The worker owns the
+    // fire state; the UI loop only sends commands and displays finished frames.
+    let fire = DoomFire::new(&config);
 
+    let (frame_tx, frame_rx) = mpsc::channel::<Vec<u8>>();
+    let (cmd_tx, cmd_rx) = mpsc::sync_channel::<FireCommand>(3);
+
+    std::thread::Builder::new()
+        .name("doomfire-render".to_owned())
+        .spawn(move || {
+            worker_loop(
+                fire,
+                frame_tx,
+                cmd_rx,
+                width,
+                height,
+                scale,
+                show_bg_image,
+                bg_image_bytes,
+                show_fps,
+                background_color,
+            );
+        })
+        .context("Failed to spawn doomfire worker thread")
+        .expect("worker thread");
+
+    let ui_state = Rc::new(RefCell::new(UiState {
+        last_screenshot: HashMap::new(),
+        was_paused: false,
+        last_screenshot_time: Instant::now(),
+        frame_count: 0,
+        current_fps: 0,
+        last_fps_update: Instant::now(),
+        // Cache the (expensive) compositor/system state queries so they are not
+        // re-spawned on every animation tick.
+        cached_outputs: get_outputs_covered(),
+        last_output_check: Instant::now(),
+        sleeping: false,
+        last_sleep_check: Instant::now(),
+        // Credit pacing starts with one free command on the first tick.
+        vsync_credit: 1.0,
+    }));
+
+    // Display + pacing happen on the widget's frame clock (vsync-aligned)
+    // instead of a glib timeout, so frames are shown immediately when they
+    // arrive and never shifted by a whole timer tick.
+    let tick_ui = ui_state.clone();
+    picture.add_tick_callback(move |picture, _frame_clock| {
+        let ui: &mut UiState = &mut tick_ui.borrow_mut();
+
+        // Show the most recent frame produced by the worker (drop stale ones).
+        let mut latest_frame: Option<Vec<u8>> = None;
+        while let Ok(frame) = frame_rx.try_recv() {
+            latest_frame = Some(frame);
+        }
+        if let Some(pixels) = latest_frame {
             if show_fps {
-                frame_count += 1;
-                if last_fps_update.elapsed() >= Duration::from_secs(1) {
-                    current_fps = frame_count;
-                    frame_count = 0;
-                    last_fps_update = Instant::now();
+                ui.frame_count += 1;
+                if ui.last_fps_update.elapsed() >= Duration::from_secs(1) {
+                    ui.current_fps = ui.frame_count;
+                    ui.frame_count = 0;
+                    ui.last_fps_update = Instant::now();
                 }
             }
-
-            // Drain any screenshots that were produced by background threads
-            while let Ok(batch) = screenshot_rx.try_recv() {
-                for (name, img) in batch {
-                    last_screenshot.insert(name, img);
-                }
-            }
-
-            let covered_outputs = get_outputs_covered();
-            let all_covered = covered_outputs.iter().all(|(_, c)| *c);
-            let sleeping = is_system_sleeping();
-            let paused = (pause_on_cover && all_covered) || sleeping;
-
-            if use_static_burn_image {
-                if let Some(img) = &bg_image {
-                    for (name, covered) in &covered_outputs {
-                        if *covered && !last_screenshot.contains_key(name) {
-                            last_screenshot.insert(name.clone(), img.clone());
-                        }
-                    }
-                }
-            }
-
-            // Transition detection: just entered paused state
-            let just_paused = paused && !was_paused;
-            
-            if paused {
-                if just_paused {
-                    if restart_on_pause {
-                        eprintln!("[DEBUG] Fire paused and reset");
-                        fire.pause_fire();
-                    } else {
-                        eprintln!("[DEBUG] Fire paused (frozen)");
-                    }
-                }
-
-                // While paused, take screenshots periodically.
-                if do_screen_burn {
-                    if !use_static_burn_image && last_screenshot_time.elapsed() >= Duration::from_millis(500) {
-                        last_screenshot_time = Instant::now();
-                        eprintln!("[DEBUG] Taking screenshot while paused");
-                        // Spawn screenshots on background thread
-                        let tx = screenshot_tx.clone();
-                        rayon::spawn(move || {
-                            let results = take_screenshots_sync(&get_outputs_covered());
-                            let _ = tx.send(results);
-                        });
-                    }
-                }
-
-                was_paused = paused;
-                if just_paused {
-                    // Force a redraw to show the paused state (e.g., cleared screen)
-                } else {
-                    // Nothing has changed, so we can skip rendering completely.
-                    return gtk::glib::ControlFlow::Continue;
-                }
-            } else {
-                if was_paused {
-                    eprintln!("[DEBUG] Fire unpaused");
-                    if restart_on_pause {
-                        fire.initialize_fire();
-                    }
-                }
-                fire.update(); // Update the fire state.
-                if show_fps {
-                    draw_fps(&mut fire, current_fps);
-                }
-            }
-            
-            if do_screen_burn {
-                if let Some((name, _)) = covered_outputs.iter().find(|(_, c)| !*c) {
-                    if let Some(img) = last_screenshot.remove(name) {
-                        last_screenshot.clear();
-                        let resized = img.resize_exact(
-                            fire.width as u32,
-                            fire.height as u32,
-                            image::imageops::FilterType::Triangle,
-                        );
-                        for y in 0..fire.height {
-                            for x in 0..fire.width {
-                                let px = resized.get_pixel(x as u32, y as u32);
-                                let r_diff = (px[0] as i32 - background_color[0] as i32).abs();
-                                let g_diff = (px[1] as i32 - background_color[1] as i32).abs();
-                                let b_diff = (px[2] as i32 - background_color[2] as i32).abs();
-                                let distance = (r_diff + g_diff + b_diff) as f32;
-                                let max_dist = 255.0 * 3.0;
-                                let idx = ((distance / max_dist) * (fire.palette.len() as f32 - 1.0)).round() as u8;
-                                let current_idx = y * fire.width + x;
-                                let fire_idx = &mut fire.pixel_buffer[current_idx];
-                                *fire_idx = (*fire_idx).max(idx);
-                            }
-                        }
-                        eprintln!("[DEBUG] Burn-in applied from screenshot");
-                    }
-                }
-            }
-            
-            was_paused = paused;
-            // Clone fire buffer for rendering
-            {
-                // This block contains the rendering logic.
-                // It uses an immutable borrow of `fire` which is released at the end of the block.
-                let fire_palette = &fire.palette;
-                let fire_buffer = &fire.pixel_buffer;
-                let fire_width = fire.width;
-                let fire_height = fire.height;
-
-                pixels
-                .par_chunks_mut(width * BYTES_PER_PIXEL)
-                .enumerate()
-                .for_each(|(wy, row)| {
-                    let fy = wy / scale;
-                    if fy < fire_height {
-                        for fx in 0..fire_width {
-                            let idx = fire_buffer[fy * fire_width + fx] as usize;
-                            let color = fire_palette[idx];
-                            let start_wx = fx * scale;
-                            let end_wx = ((fx + 1) * scale).min(width);
-
-                            let slice_start = start_wx * BYTES_PER_PIXEL;
-                            let slice_end = end_wx * BYTES_PER_PIXEL;
-
-                            if slice_end <= row.len() {
-                                if show_bg_image && idx == 0 {
-                                    if let Some(bg_bytes) = &bg_image_bytes {
-                                        let bg_row_start = wy * width * BYTES_PER_PIXEL;
-                                        let bg_slice = &bg_bytes[bg_row_start + slice_start .. bg_row_start + slice_end];
-                                        row[slice_start..slice_end].copy_from_slice(bg_slice);
-                                    }
-                                } else {
-                                    row[slice_start..slice_end].copy_from_slice(&color.repeat(end_wx - start_wx));
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Now create the Pixbuf from the owned pixel vector
-            let pixbuf = Pixbuf::from_bytes(
-                &gtk::glib::Bytes::from_owned(pixels.clone()),
-                Colorspace::Rgb,
-                false, // no alpha channel
-                8,     // bits per sample
+            // Upload the buffer directly as a texture; skips the pixbuf
+            // intermediate copy + GSK pixbuf->texture conversion.
+            let texture = gtk::gdk::MemoryTexture::new(
                 width as i32,
                 height as i32,
-                width as i32 * BYTES_PER_PIXEL as i32, // rowstride in bytes
+                gtk::gdk::MemoryFormat::R8g8b8,
+                &gtk::glib::Bytes::from_owned(pixels),
+                width * BYTES_PER_PIXEL,
             );
-
-            // Update the GTK image widget
-            picture.set_pixbuf(Some(&pixbuf));
-
-            gtk::glib::ControlFlow::Continue
+            picture.set_paintable(Some(&texture));
         }
+
+        // Pace fire updates to min(configured fps, refresh rate) using fractional
+        // credits per vsync tick, so 60fps on a 60Hz screen fires every vsync
+        // instead of erratically skipping half the ticks.
+        let refresh = _frame_clock.fps();
+        let refresh = if refresh > 1.0 { refresh } else { 60.0 };
+        let effective_fps = (fps as f64).min(refresh);
+        ui.vsync_credit += effective_fps / refresh;
+        if ui.vsync_credit < 1.0 {
+            return gtk::glib::ControlFlow::Continue;
+        }
+
+        // Drain any screenshots that were produced by background threads
+        while let Ok(batch) = screenshot_rx.try_recv() {
+            for (name, img) in batch {
+                ui.last_screenshot.insert(name, img);
+            }
+        }
+
+        // Refresh compositor/system state at a low rate to avoid spawning
+        // hyprctl/systemctl processes on every animation tick.
+        if ui.last_output_check.elapsed() >= Duration::from_millis(500) {
+            ui.cached_outputs = get_outputs_covered();
+            ui.last_output_check = Instant::now();
+        }
+        if ui.last_sleep_check.elapsed() >= Duration::from_secs(1) {
+            ui.sleeping = is_system_sleeping();
+            ui.last_sleep_check = Instant::now();
+        }
+
+        let all_covered = ui.cached_outputs.iter().all(|(_, c)| *c);
+        let paused = (pause_on_cover && all_covered) || ui.sleeping;
+
+        if paused {
+            let just_paused = !ui.was_paused;
+            if just_paused {
+                if restart_on_pause {
+                    eprintln!("[DEBUG] Fire paused and reset");
+                } else {
+                    eprintln!("[DEBUG] Fire paused (frozen)");
+                }
+                let burn =
+                    take_burn_screenshot(&mut ui.last_screenshot, &ui.cached_outputs, do_screen_burn);
+                let _ = cmd_tx.send(FireCommand::Pause { clear: restart_on_pause, burn });
+                ui.was_paused = true;
+                return gtk::glib::ControlFlow::Continue;
+            }
+
+            if use_static_burn_image {
+                if let Some(img) = &bg_image_main {
+                    for (name, covered) in &ui.cached_outputs {
+                        if *covered && !ui.last_screenshot.contains_key(name) {
+                            ui.last_screenshot.insert(name.clone(), img.clone());
+                        }
+                    }
+                }
+            }
+
+            // While paused, take screenshots periodically.
+            if do_screen_burn {
+                if !use_static_burn_image && ui.last_screenshot_time.elapsed() >= Duration::from_millis(500) {
+                    ui.last_screenshot_time = Instant::now();
+                    eprintln!("[DEBUG] Taking screenshot while paused");
+                    // Spawn screenshots on background thread
+                    let tx = screenshot_tx.clone();
+                    rayon::spawn(move || {
+                        let results = take_screenshots_sync(&get_outputs_covered());
+                        let _ = tx.send(results);
+                    });
+                }
+            }
+
+            ui.was_paused = true;
+            return gtk::glib::ControlFlow::Continue;
+        }
+
+        let init = ui.was_paused && restart_on_pause;
+        if ui.was_paused {
+            eprintln!("[DEBUG] Fire unpaused");
+        }
+        let burn = take_burn_screenshot(&mut ui.last_screenshot, &ui.cached_outputs, do_screen_burn);
+        ui.was_paused = false;
+        // If the worker is behind, skip this tick's update instead of growing the queue.
+        match cmd_tx.try_send(FireCommand::Update { init, burn, fps_value: ui.current_fps }) {
+            Ok(()) => ui.vsync_credit -= 1.0,
+            Err(mpsc::TrySendError::Full(_)) => {}
+            Err(mpsc::TrySendError::Disconnected(_)) => return gtk::glib::ControlFlow::Break,
+        }
+
+        gtk::glib::ControlFlow::Continue
     });
+}
+
+/// Owns the fire state on a background thread: simulates and renders one frame
+/// per command, sends finished pixel buffers to the UI thread.
+#[allow(clippy::too_many_arguments)]
+fn worker_loop(
+    mut fire: DoomFire,
+    frame_tx: mpsc::Sender<Vec<u8>>,
+    cmd_rx: mpsc::Receiver<FireCommand>,
+    width: usize,
+    height: usize,
+    scale: usize,
+    show_bg_image: bool,
+    bg_image_bytes: Option<Vec<u8>>,
+    show_fps: bool,
+    background_color: [u8; 3],
+) {
+    while let Ok(cmd) = cmd_rx.recv() {
+        match cmd {
+            FireCommand::Pause { clear, burn } => {
+                if clear {
+                    fire.pause_fire();
+                }
+                if let Some(img) = burn {
+                    apply_burn(&mut fire, &img, background_color);
+                }
+                send_frame(&fire, &frame_tx, width, height, scale, show_bg_image, bg_image_bytes.as_deref());
+            }
+            FireCommand::Update { init, burn, fps_value } => {
+                if init {
+                    fire.initialize_fire();
+                }
+                fire.update();
+                if show_fps {
+                    draw_fps(&mut fire, fps_value);
+                }
+                if let Some(img) = burn {
+                    apply_burn(&mut fire, &img, background_color);
+                }
+                send_frame(&fire, &frame_tx, width, height, scale, show_bg_image, bg_image_bytes.as_deref());
+            }
+        }
+    }
+}
+
+/// Renders the fire state into a fresh RGB pixel buffer and sends it to the UI.
+fn send_frame(
+    fire: &DoomFire,
+    frame_tx: &mpsc::Sender<Vec<u8>>,
+    width: usize,
+    height: usize,
+    scale: usize,
+    show_bg_image: bool,
+    bg_image_bytes: Option<&[u8]>,
+) {
+    let fire_palette = &fire.palette;
+    let fire_buffer = &fire.pixel_buffer;
+    let fire_width = fire.width;
+    let fire_height = fire.height;
+
+    let mut pixels = vec![0u8; width * height * BYTES_PER_PIXEL];
+    pixels
+        .par_chunks_mut(width * BYTES_PER_PIXEL)
+        .enumerate()
+        .for_each(|(wy, row)| {
+            let fy = wy / scale;
+            if fy < fire_height {
+                for fx in 0..fire_width {
+                    let idx = fire_buffer[fy * fire_width + fx] as usize;
+                    let color = fire_palette[idx];
+                    let start_wx = fx * scale;
+                    let end_wx = ((fx + 1) * scale).min(width);
+
+                    let slice_start = start_wx * BYTES_PER_PIXEL;
+                    let slice_end = end_wx * BYTES_PER_PIXEL;
+
+                    if slice_end <= row.len() {
+                        if show_bg_image && idx == 0 {
+                            if let Some(bg_bytes) = bg_image_bytes {
+                                let bg_row_start = wy * width * BYTES_PER_PIXEL;
+                                let bg_slice = &bg_bytes[bg_row_start + slice_start .. bg_row_start + slice_end];
+                                row[slice_start..slice_end].copy_from_slice(bg_slice);
+                            }
+                        } else {
+                            // Write the color pattern without allocating
+                            // (the old `color.repeat()` heap-allocated per fire pixel).
+                            let mut p = slice_start;
+                            while p + BYTES_PER_PIXEL <= slice_end {
+                                row[p] = color[0];
+                                row[p + 1] = color[1];
+                                row[p + 2] = color[2];
+                                p += BYTES_PER_PIXEL;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+    let _ = frame_tx.send(pixels);
+}
+
+/// Pops a screenshot to burn into the fire, if burn mode is active and some
+/// output is uncovered.
+fn take_burn_screenshot(
+    last_screenshot: &mut HashMap<String, DynamicImage>,
+    covered_outputs: &[(String, bool)],
+    do_screen_burn: bool,
+) -> Option<DynamicImage> {
+    if !do_screen_burn {
+        return None;
+    }
+    if let Some((name, _)) = covered_outputs.iter().find(|(_, c)| !*c) {
+        if let Some(img) = last_screenshot.remove(name) {
+            last_screenshot.clear();
+            return Some(img);
+        }
+    }
+    None
+}
+
+/// Maxes the fire buffer with the brightness of the given screenshot so that
+/// bright areas leave a burning trail.
+fn apply_burn(fire: &mut DoomFire, screenshot: &DynamicImage, background_color: [u8; 3]) {
+    let resized = screenshot.resize_exact(
+        fire.width as u32,
+        fire.height as u32,
+        image::imageops::FilterType::Triangle,
+    );
+    for y in 0..fire.height {
+        for x in 0..fire.width {
+            let px = resized.get_pixel(x as u32, y as u32);
+            let r_diff = (px[0] as i32 - background_color[0] as i32).abs();
+            let g_diff = (px[1] as i32 - background_color[1] as i32).abs();
+            let b_diff = (px[2] as i32 - background_color[2] as i32).abs();
+            let distance = (r_diff + g_diff + b_diff) as f32;
+            let max_dist = 255.0 * 3.0;
+            let idx = ((distance / max_dist) * (fire.palette.len() as f32 - 1.0)).round() as u8;
+            let current_idx = y * fire.width + x;
+            let fire_idx = &mut fire.pixel_buffer[current_idx];
+            *fire_idx = (*fire_idx).max(idx);
+        }
+    }
+    eprintln!("[DEBUG] Burn-in applied from screenshot");
 }
 
 fn take_screenshots_sync(covered_outputs: &Vec<(String, bool)>) -> Vec<(String, DynamicImage)> {

@@ -2,8 +2,8 @@ use crate::fire_types::{generate_palette, FireType};
 use crate::config::Config;
 use crate::particle::Particle;
 use crate::perlin::perlin_noise_1d;
-use rand::rngs::ThreadRng;
-use rand::Rng;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 use strum::IntoEnumIterator;
 
 pub struct DoomFire {
@@ -15,7 +15,7 @@ pub struct DoomFire {
     t: f64,
     pub particles: Vec<Particle>, // Add this field
     wind_strength: f64,
-    rng: ThreadRng,
+    rng: SmallRng,
 }
 
 impl DoomFire {
@@ -40,7 +40,7 @@ impl DoomFire {
             Some("Candy") => FireType::Candy,
             Some("Random") => {
                 let variants: Vec<FireType> = FireType::iter().collect();
-                let mut rng = ThreadRng::default();
+                let mut rng = SmallRng::from_os_rng();
                 let idx = rng.random_range(0..variants.len());
                 println!("Random fire type selected: {:?}", variants[idx]);
                 variants[idx]
@@ -61,14 +61,14 @@ impl DoomFire {
             t: 0.0,
             particles: Vec::new(),
             wind_strength: config.wind_strength.unwrap_or(1.0),
-            rng: rand::rng(),
+            rng: SmallRng::from_os_rng(),
         };
         doom_fire.initialize_fire();
         doom_fire
     }
 
     pub fn update(&mut self) {
-        let mut rng = ThreadRng::default();
+        let rng = &mut self.rng;
         self.t += 0.03; // Increase frequency for more rapid wind changes
         let noise_val = perlin_noise_1d(self.t * 1.5);
         let jitter: f64 = rng.random_range(-0.5..=0.5);

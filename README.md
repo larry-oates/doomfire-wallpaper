@@ -1,4 +1,4 @@
-# DOOM-style fire wallpaper for Hyprland
+# DOOM-style fire wallpaper for Linux
 
 Want to use a [fire from DOOM](https://fabiensanglard.net/doom_fire_psx/) as a dynamic wallpaper in Arch linux? 
 
@@ -31,7 +31,9 @@ Setting this as your wallpaper depends on your compositor, currently there is on
 
 ## Installation
 
-1. **Install with Yay:**
+1. **Install:**
+
+  **Arch Linux:**
 
   Install a prebuilt binary for X86 (faster):
   ```sh
