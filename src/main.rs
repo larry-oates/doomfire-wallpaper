@@ -8,7 +8,7 @@ pub mod particle;
 
 use crate::config::{Config, ScreenBurn};
 use crate::doom_fire::DoomFire;
-use crate::wallpaper::{get_outputs_covered, is_system_sleeping};
+use crate::wallpaper::{get_outputs_covered, is_system_sleeping, take_outputs_dirty};
 use anyhow::{Context, Result};
 use gtk4 as gtk;
 use gtk::prelude::*;
@@ -103,6 +103,14 @@ enum FireCommand {
 struct UiState {
     last_screenshot: HashMap<String, DynamicImage>,
     was_paused: bool,
+    /// Moment the fire last resumed; in-flight pause-time screenshots are
+    /// accepted for this long afterwards.
+    unpause_at: Instant,
+    /// Last successfully popped burn; fallback when the newest pause had no
+    /// capture finished in time (rapid pause/unpause cycles).
+    last_burn: Option<DynamicImage>,
+    /// Whether a within-grace miss was already logged for this resume.
+    burn_miss_logged: bool,
     last_screenshot_time: Instant,
     frame_count: u32,
     current_fps: u32,
@@ -211,9 +219,16 @@ fn build_ui(app: &Application) {
         .context("Failed to spawn doomfire worker thread")
         .expect("worker thread");
 
+    // Listen for Hyprland events so coverage changes are detected within a
+    // frame rather than on the 500ms poll.
+    wallpaper::start_compositor_event_listener();
+
     let ui_state = Rc::new(RefCell::new(UiState {
         last_screenshot: HashMap::new(),
         was_paused: false,
+        unpause_at: Instant::now(),
+        last_burn: None,
+        burn_miss_logged: true,
         last_screenshot_time: Instant::now(),
         frame_count: 0,
         current_fps: 0,
@@ -272,16 +287,25 @@ fn build_ui(app: &Application) {
             return gtk::glib::ControlFlow::Continue;
         }
 
-        // Drain any screenshots that were produced by background threads
+        // Drain any screenshots produced by background threads. Screenshot
+        // spawns only happen while paused. Keep pause-time batches, including
+        // ones finishing within RESUME_BURN_GRACE after unpause (grim is not
+        // instant, so the resume may beat the capture) - those carry the
+        // pre-switch content wanted for the trail. Anything later would show
+        // the running fire itself and make the burn look like it "reapplies".
+        let mut got_new_screenshot = false;
         while let Ok(batch) = screenshot_rx.try_recv() {
-            for (name, img) in batch {
-                ui.last_screenshot.insert(name, img);
+            if ui.was_paused || ui.unpause_at.elapsed() < RESUME_BURN_GRACE {
+                for (name, img) in batch {
+                    ui.last_screenshot.insert(name, img);
+                    got_new_screenshot = true;
+                }
             }
         }
 
-        // Refresh compositor/system state at a low rate to avoid spawning
-        // hyprctl/systemctl processes on every animation tick.
-        if ui.last_output_check.elapsed() >= Duration::from_millis(500) {
+        // Refresh compositor state immediately when the event listener flags
+        // a change, polling only as a slow fallback (e.g. unreachable socket).
+        if take_outputs_dirty() || ui.last_output_check.elapsed() >= Duration::from_millis(500) {
             ui.cached_outputs = get_outputs_covered();
             ui.last_output_check = Instant::now();
         }
@@ -296,14 +320,29 @@ fn build_ui(app: &Application) {
         if paused {
             let just_paused = !ui.was_paused;
             if just_paused {
+                eprintln!("[DEBUG {:.3}] Fire paused", debug_ts());
                 if restart_on_pause {
                     eprintln!("[DEBUG] Fire paused and reset");
                 } else {
                     eprintln!("[DEBUG] Fire paused (frozen)");
                 }
-                let burn =
-                    take_burn_screenshot(&mut ui.last_screenshot, &ui.cached_outputs, do_screen_burn);
+                let mut burn = take_burn_screenshot(
+                    &mut ui.last_screenshot,
+                    &ui.cached_outputs,
+                    do_screen_burn,
+                    true,
+                );
+                if burn.is_none() && use_static_burn_image {
+                    burn = bg_image_main.clone();
+                }
                 let _ = cmd_tx.send(FireCommand::Pause { clear: restart_on_pause, burn });
+                // Force a capture right away on the covered state so even a
+                // brief pause leaves a trail; continue the cadence from here.
+                if do_screen_burn && !use_static_burn_image {
+                    ui.last_screenshot_time = Instant::now();
+                    eprintln!("[DEBUG] Screenshot forced at cover");
+                    spawn_screenshot_capture(screenshot_tx.clone());
+                }
                 ui.was_paused = true;
                 return gtk::glib::ControlFlow::Continue;
             }
@@ -323,12 +362,16 @@ fn build_ui(app: &Application) {
                 if !use_static_burn_image && ui.last_screenshot_time.elapsed() >= Duration::from_millis(500) {
                     ui.last_screenshot_time = Instant::now();
                     eprintln!("[DEBUG] Taking screenshot while paused");
-                    // Spawn screenshots on background thread
-                    let tx = screenshot_tx.clone();
-                    rayon::spawn(move || {
-                        let results = take_screenshots_sync(&get_outputs_covered());
-                        let _ = tx.send(results);
-                    });
+                    spawn_screenshot_capture(screenshot_tx.clone());
+                }
+
+                // Re-render the frozen frame with the freshest burn as soon as
+                // each screenshot lands, so the trail is already on screen the
+                // moment the user returns instead of appearing a frame (or a
+                // screenshot cycle) later. Cheap: a render every ~500ms.
+                if got_new_screenshot {
+                    let burn = ui.last_screenshot.values().next().cloned();
+                    let _ = cmd_tx.try_send(FireCommand::Pause { clear: false, burn });
                 }
             }
 
@@ -337,10 +380,35 @@ fn build_ui(app: &Application) {
         }
 
         let init = ui.was_paused && restart_on_pause;
-        if ui.was_paused {
-            eprintln!("[DEBUG] Fire unpaused");
+        let just_unpaused = ui.was_paused;
+        if just_unpaused {
+            ui.unpause_at = Instant::now();
         }
-        let burn = take_burn_screenshot(&mut ui.last_screenshot, &ui.cached_outputs, do_screen_burn);
+        // One pop per tick, allowed within the grace window after resume so
+        // late pause-time captures still burn; afterwards popping would burn
+        // screenshots of the running fire itself.
+        let within_grace = ui.unpause_at.elapsed() < RESUME_BURN_GRACE;
+        let mut burn = take_burn_screenshot(&mut ui.last_screenshot, &ui.cached_outputs, do_screen_burn, true);
+        if let Some(img) = burn.as_ref() {
+            ui.last_burn = Some(img.clone());
+        }
+        if just_unpaused {
+            eprintln!("[DEBUG {:.3}] Fire unpaused, burn={:?}", debug_ts(), burn.is_some());
+            ui.burn_miss_logged = burn.is_some();
+        } else if within_grace && burn.is_none() && !ui.burn_miss_logged {
+            eprintln!("[DEBUG {:.3}] No fresh burn within grace", debug_ts());
+            ui.burn_miss_logged = true;
+        }
+        // No fresh capture made it in time (rapid toggles): on the resume tick
+        // only, reuse the last known real trail instead of a blank. Later
+        // grace ticks never re-inject it - the burn must be applied once so
+        // the fire can carry it away.
+        if just_unpaused && burn.is_none() {
+            if let Some(prev) = ui.last_burn.clone() {
+                eprintln!("[DEBUG {:.3}] Falling back to last known burn", debug_ts());
+                burn = Some(prev);
+            }
+        }
         ui.was_paused = false;
         // If the worker is behind, skip this tick's update instead of growing the queue.
         match cmd_tx.try_send(FireCommand::Update { init, burn, fps_value: ui.current_fps }) {
@@ -453,20 +521,32 @@ fn send_frame(
     let _ = frame_tx.send(pixels);
 }
 
+/// Window after unpause during which in-flight pause-time screenshots are
+/// still accepted/burned.
+const RESUME_BURN_GRACE: Duration = Duration::from_millis(250);
+
 /// Pops a screenshot to burn into the fire, if burn mode is active and some
-/// output is uncovered.
+/// output is uncovered. Pass `allow_pop=false` (outside the resume grace
+/// window) to run without consuming: it just reports cache misses.
 fn take_burn_screenshot(
     last_screenshot: &mut HashMap<String, DynamicImage>,
     covered_outputs: &[(String, bool)],
     do_screen_burn: bool,
+    allow_pop: bool,
 ) -> Option<DynamicImage> {
     if !do_screen_burn {
         return None;
     }
     if let Some((name, _)) = covered_outputs.iter().find(|(_, c)| !*c) {
         if let Some(img) = last_screenshot.remove(name) {
-            last_screenshot.clear();
-            return Some(img);
+            if allow_pop {
+                last_screenshot.clear();
+                eprintln!("[DEBUG {:.3}] Popping burn for output {} (had cached image)", debug_ts(), name);
+                return Some(img);
+            }
+            // Outside the grace window: put it back, don't burn here.
+            last_screenshot.insert(name.clone(), img);
+            return None;
         }
     }
     None
@@ -497,6 +577,16 @@ fn apply_burn(fire: &mut DoomFire, screenshot: &DynamicImage, background_color: 
     eprintln!("[DEBUG] Burn-in applied from screenshot");
 }
 
+/// Captures screenshots of all current outputs on a rayon background thread
+/// and sends the results back to the UI thread through the given channel.
+fn spawn_screenshot_capture(tx: mpsc::Sender<Vec<(String, DynamicImage)>>) {
+    rayon::spawn(move || {
+        let outputs = get_outputs_covered();
+        let _ = tx.send(take_screenshots_sync(&outputs));
+    });
+}
+
+/// Screenshots every output synchronously (spawn on a background thread).
 fn take_screenshots_sync(covered_outputs: &Vec<(String, bool)>) -> Vec<(String, DynamicImage)> {
     let mut results = Vec::new();
     for (name, _covered) in covered_outputs {
@@ -567,4 +657,11 @@ fn resolve_path(path: &str) -> PathBuf {
         }
     }
     PathBuf::from(path)
+}
+
+fn debug_ts() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64() % 100000.0)
+        .unwrap_or(0.0)
 }
