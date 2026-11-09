@@ -160,6 +160,10 @@ struct UiState {
     sleeping: bool,
     last_sleep_check: Instant,
     vsync_credit: f64,
+    // Last known cursor position in fire-cell coordinates. Kept between
+    // ticks (not per-tick) so the worker always has a live target to steer
+    // the fire ball at, even on ticks the poller hasn't produced fresh data.
+    pointer: Option<(usize, usize)>,
 }
 
 /// Runs the GTK application and the wallpaper animation loop.
@@ -296,6 +300,7 @@ fn build_ui(app: &Application) {
         last_sleep_check: Instant::now(),
         // Credit pacing starts with one free command on the first tick.
         vsync_credit: 1.0,
+        pointer: None,
     }));
 
     // Display + pacing happen on the widget's frame clock (vsync-aligned)
@@ -349,17 +354,15 @@ fn build_ui(app: &Application) {
             }
         }
 
-        // Keep only the latest cursor position (drop stale ones) and convert
-        // global screen coordinates into fire-cell coordinates.
-        let mut pointer = None;
+        // Update the cursor target only when the poller produced fresh data;
+        // between polls the last known target stays valid (the fire ball must
+        // keep steering towards it, not treat every tick as "cursor gone").
         while let Ok(pos) = pos_rx.try_recv() {
-            pointer = Some(pos);
+            let fx = (pos.0.max(0) as usize / scale).min(fire_width.max(1) - 1);
+            let fy = (pos.1.max(0) as usize / scale).min(fire_height.max(1) - 1);
+            ui.pointer = Some((fx, fy));
         }
-        let pointer = pointer.map(|(x, y)| {
-            let fx = (x.max(0) as usize / scale).min(fire_width.max(1) - 1);
-            let fy = (y.max(0) as usize / scale).min(fire_height.max(1) - 1);
-            (fx, fy)
-        });
+        let pointer = ui.pointer;
 
         // Refresh compositor/system state at a low rate to avoid spawning
         // hyprctl/systemctl processes on every animation tick.
