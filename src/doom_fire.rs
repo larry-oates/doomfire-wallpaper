@@ -126,31 +126,22 @@ impl DoomFire {
         );
 
         // Advance the cursor fire ball as a damped spring attached to the
-        // cursor: force proportional to displacement (a stiff spring makes it
-        // fast), light drag preserves momentum across the target, and a
-        // generous kinematic speed cap bounds the worst-case flick. Under
-        // strong damping overdamping would kill the bounce, so keep the drag
-        // low and the ball will overshoot the cursor a couple of times.
+        // cursor: force proportional to displacement, so a distant cursor
+        // genuinely accelerates the ball harder (a real spring pulls harder
+        // when stretched), and nearby targets give gentle, small wobble.
+        // Velocity is bounded only by the kinematic top speed cap so freak
+        // jumps (e.g. across multi-monitor spans) can't teleport the ball.
         if let Some((tx, ty)) = self.cursor {
             let target_x = tx as f64 + 0.5;
             let target_y = ty as f64 + 0.5;
             let dx = target_x - self.ball_x;
             let dy = target_y - self.ball_y;
 
-            // Spring force proportional to displacement, capped by thrust so
-            // extreme distance can't produce absurd accelerations.
-            let max_accel = self.mouse_fire_speed * 0.5;
-            let mut ax = dx * self.mouse_fire_accel;
-            let mut ay = dy * self.mouse_fire_accel;
-            let a_mag = (ax * ax + ay * ay).sqrt();
-            if a_mag > max_accel && a_mag > 0.0 {
-                ax = ax / a_mag * max_accel;
-                ay = ay / a_mag * max_accel;
-            }
-            self.ball_vx += ax * dt;
-            self.ball_vy += ay * dt;
+            // Unbounded spring force (displacement-proportional acceleration).
+            self.ball_vx += dx * self.mouse_fire_accel * dt;
+            self.ball_vy += dy * self.mouse_fire_accel * dt;
 
-            // Drag (viscous) plus its speed limit.
+            // Drag (viscous) plus its hard speed limit.
             let damping = (-self.mouse_fire_damping * dt).exp();
             self.ball_vx *= damping;
             self.ball_vy *= damping;
