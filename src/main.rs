@@ -246,8 +246,7 @@ fn build_ui(app: &Application) {
     let show_bg_image = !do_screen_burn && bg_image_main.is_some();
 
     // Channel to receive screenshots taken on a background thread without blocking the UI
-    let (screenshot_tx, screenshot_rx) = mpsc::channel::<Vec<(String, DynamicImage)>>();
-
+    let (screenshot_tx, screenshot_rx) = mpsc::channel::<(String, DynamicImage)>();
     // Move fire simulation + rendering off the UI thread. The worker owns the
     // fire state; the UI loop only sends commands and displays finished frames.
     let fire = DoomFire::new(&config);
@@ -369,12 +368,10 @@ fn build_ui(app: &Application) {
         // pre-switch content wanted for the trail. Anything later would show
         // the running fire itself and make the burn look like it "reapplies".
         let mut got_new_screenshot = false;
-        while let Ok(batch) = screenshot_rx.try_recv() {
+        while let Ok((name, img)) = screenshot_rx.try_recv() {
             if ui.was_paused || ui.unpause_at.elapsed() < RESUME_BURN_GRACE {
-                for (name, img) in batch {
-                    ui.last_screenshot.insert(name, img);
-                    got_new_screenshot = true;
-                }
+                ui.last_screenshot.insert(name, img);
+                got_new_screenshot = true;
             }
         }
 
@@ -389,8 +386,10 @@ fn build_ui(app: &Application) {
         let pointer = ui.pointer;
 
         // Refresh compositor/system state at a low rate to avoid spawning
-        // hyprctl/systemctl processes on every animation tick.
-        if ui.last_output_check.elapsed() >= Duration::from_millis(500) {
+        // hyprctl/systemctl processes on every animation tick - except when a
+        // compositor event flagged coverage as dirty, which is handled within
+        // a frame so pause pauses immediately.
+        if take_outputs_dirty() || ui.last_output_check.elapsed() >= Duration::from_millis(500) {
             ui.cached_outputs = get_outputs_covered();
             ui.last_output_check = Instant::now();
         }
@@ -426,7 +425,7 @@ fn build_ui(app: &Application) {
                 if do_screen_burn && !use_static_burn_image {
                     ui.last_screenshot_time = Instant::now();
                     eprintln!("[DEBUG] Screenshot forced at cover");
-                    spawn_screenshot_capture(screenshot_tx.clone());
+                    spawn_screenshot_capture(screenshot_tx.clone(), &ui.cached_outputs);
                 }
                 ui.was_paused = true;
                 return gtk::glib::ControlFlow::Continue;
@@ -447,7 +446,7 @@ fn build_ui(app: &Application) {
                 if !use_static_burn_image && ui.last_screenshot_time.elapsed() >= Duration::from_millis(500) {
                     ui.last_screenshot_time = Instant::now();
                     eprintln!("[DEBUG] Taking screenshot while paused");
-                    spawn_screenshot_capture(screenshot_tx.clone());
+                    spawn_screenshot_capture(screenshot_tx.clone(), &ui.cached_outputs);
                 }
 
                 // Re-render the frozen frame with the freshest burn as soon as
@@ -673,36 +672,47 @@ fn apply_burn(fire: &mut DoomFire, screenshot: &DynamicImage, background_color: 
     eprintln!("[DEBUG] Burn-in applied from screenshot");
 }
 
-/// Captures screenshots of all current outputs on a rayon background thread
-/// and sends the results back to the UI thread through the given channel.
-fn spawn_screenshot_capture(tx: mpsc::Sender<Vec<(String, DynamicImage)>>) {
+/// Captures one screenshot per output in parallel on rayon threads and sends
+/// each finished screenshot to the UI thread immediately, so the burn trail
+/// renders after a single grim instead of after the serial capture of every
+/// output.
+fn spawn_screenshot_capture(
+    tx: mpsc::Sender<(String, DynamicImage)>,
+    covered_outputs: &[(String, bool)],
+) {
+    let output_names: Vec<String> = covered_outputs.iter().map(|(name, _)| name.clone()).collect();
     rayon::spawn(move || {
-        let outputs = get_outputs_covered();
-        let _ = tx.send(take_screenshots_sync(&outputs));
+        rayon::scope(|s| {
+            for name in output_names {
+                let tx = tx.clone();
+                s.spawn(move |_| {
+                    if let Some(image) = capture_output(&name) {
+                        let _ = tx.send((name, image));
+                    }
+                });
+            }
+        });
     });
 }
 
-/// Screenshots every output synchronously (spawn on a background thread).
-fn take_screenshots_sync(covered_outputs: &Vec<(String, bool)>) -> Vec<(String, DynamicImage)> {
-    let mut results = Vec::new();
-    for (name, _covered) in covered_outputs {
-        eprintln!("[DEBUG] Taking screenshot for output: {name}");
-        if let Ok(output) = std::process::Command::new("grim")
-            .args(["-o", name, "-"])
-            .output()
-        {
-            if output.status.success() {
-                if let Ok(i) = image::load_from_memory(&output.stdout) {
-                    results.push((name.clone(), i));
-                } else {
-                    eprintln!("[DEBUG] Failed to decode screenshot for {name}");
-                }
-            } else {
-                eprintln!("[DEBUG] Screenshot command failed for {name}");
-            }
+/// Captures a single output synchronously (spawn on a background thread).
+fn capture_output(name: &str) -> Option<DynamicImage> {
+    eprintln!("[DEBUG] Taking screenshot for output: {name}");
+    let output = std::process::Command::new("grim")
+        .args(["-o", name, "-"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        eprintln!("[DEBUG] Screenshot command failed for {name}");
+        return None;
+    }
+    match image::load_from_memory(&output.stdout) {
+        Ok(image) => Some(image),
+        Err(_) => {
+            eprintln!("[DEBUG] Failed to decode screenshot for {name}");
+            None
         }
     }
-    results
 }
 
 fn draw_fps(fire: &mut DoomFire, fps: u32) {
