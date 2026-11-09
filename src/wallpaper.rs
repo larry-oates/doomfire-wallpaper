@@ -1,4 +1,83 @@
+use std::io::{BufRead, BufReader};
+use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+
+/// Set by the compositor event listener whenever a Hyprland event may change
+/// workspace/monitor coverage; consumed by the UI tick callback.
+static OUTPUTS_DIRTY: AtomicBool = AtomicBool::new(false);
+
+/// Consumes the flag set by the event listener.
+pub fn take_outputs_dirty() -> bool {
+    OUTPUTS_DIRTY.swap(false, Ordering::Relaxed)
+}
+
+/// Hyprland's socket2 event socket, if we are in a Hyprland session.
+fn hyprland_socket2_path() -> Option<PathBuf> {
+    let runtime = std::env::var_os("XDG_RUNTIME_DIR")?;
+    let sig = std::env::var("HYPRLAND_INSTANCE_SIGNATURE").ok()?;
+    Some(
+        PathBuf::from(runtime)
+            .join("hypr")
+            .join(sig)
+            .join(".socket2.sock"),
+    )
+}
+
+/// Socket2 events that can change which outputs are covered.
+const COVERAGE_EVENTS: &[&str] = &[
+    "workspace>>",
+    "workspacev2>>",
+    "specialworkspace>>",
+    "specialworkspacev2>>",
+    "focusedmon>>",
+    "focusedmonv2>>",
+    "openwindow>>",
+    "openwindowv2>>",
+    "closewindow>>",
+    "movewindow>>",
+    "movewindowv2>>",
+    "moveWorkspace>>",
+    "createWorkspace>>",
+    "destroyWorkspace>>",
+    "monitoradded>>",
+    "monitoraddedv2>>",
+    "monitorremoved>>",
+    "fullscreen>>",
+    "changefloatingmode>>",
+    "configreloaded>>",
+];
+
+/// Listens to Hyprland socket2 events in the background and flags coverage as
+/// dirty when something relevant happens, so the UI reacts within a frame
+/// instead of waiting for the next poll. Falls back to polling in callers.
+pub fn start_compositor_event_listener() {
+    if hyprland_socket2_path().is_none() {
+        return;
+    }
+    let _ = std::thread::Builder::new()
+        .name("hypr_events".to_string())
+        .spawn(move || loop {
+            let Some(path) = hyprland_socket2_path() else {
+                return;
+            };
+            match UnixStream::connect(&path) {
+                Ok(stream) => {
+                    let reader = BufReader::new(stream);
+                    for line in reader.lines().map_while(Result::ok) {
+                        if COVERAGE_EVENTS.iter().any(|e| line.starts_with(e)) {
+                            OUTPUTS_DIRTY.store(true, Ordering::Relaxed);
+                        }
+                    }
+                }
+                Err(_) => {}
+            }
+            // Socket dropped (compositor restart) - retry shortly.
+            std::thread::sleep(Duration::from_secs(2));
+        });
+}
 
 /// Returns the current cursor position in global screen coordinates, as
 /// reported by Hyprland. Returns None if Hyprland is unavailable.
