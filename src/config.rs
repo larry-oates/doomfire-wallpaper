@@ -23,6 +23,8 @@ pub struct Config {
     pub image_path: Option<String>,
     pub mouse_follow: Option<bool>,
     pub mouse_fire_size: Option<usize>,
+    pub mouse_fire_accel: Option<f64>,
+    pub mouse_fire_damping: Option<f64>,
 }
 
 impl Config {
@@ -48,6 +50,8 @@ impl Config {
             image_path: config.image_path.or(default.image_path),
             mouse_follow: config.mouse_follow.or(default.mouse_follow),
             mouse_fire_size: config.mouse_fire_size.or(default.mouse_fire_size),
+            mouse_fire_accel: config.mouse_fire_accel.or(default.mouse_fire_accel),
+            mouse_fire_damping: config.mouse_fire_damping.or(default.mouse_fire_damping),
         }
     }
 }
@@ -69,6 +73,8 @@ impl Default for Config {
             image_path: None,
             mouse_follow: Some(true),
             mouse_fire_size: Some(6),
+            mouse_fire_accel: Some(25.0),
+            mouse_fire_damping: Some(5.0),
         }
     }
 }

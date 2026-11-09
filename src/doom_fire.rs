@@ -17,7 +17,13 @@ pub struct DoomFire {
     wind_strength: f64,
     rng: SmallRng,
     cursor: Option<(usize, usize)>,
+    ball_x: f64,
+    ball_y: f64,
+    ball_vx: f64,
+    ball_vy: f64,
     mouse_fire_size: usize,
+    mouse_fire_accel: f64,
+    mouse_fire_damping: f64,
 }
 
 impl DoomFire {
@@ -65,13 +71,19 @@ impl DoomFire {
             wind_strength: config.wind_strength.unwrap_or(1.0),
             rng: SmallRng::from_os_rng(),
             cursor: None,
+            ball_x: 0.0,
+            ball_y: 0.0,
+            ball_vx: 0.0,
+            ball_vy: 0.0,
             mouse_fire_size: config.mouse_fire_size.unwrap_or(6).max(1),
+            mouse_fire_accel: config.mouse_fire_accel.unwrap_or(25.0).max(0.0),
+            mouse_fire_damping: config.mouse_fire_damping.unwrap_or(5.0).max(0.0),
         };
         doom_fire.initialize_fire();
         doom_fire
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, dt: f64) {
         let rng = &mut self.rng;
         self.t += 0.03; // Increase frequency for more rapid wind changes
         let noise_val = perlin_noise_1d(self.t * 1.5);
@@ -111,10 +123,39 @@ impl DoomFire {
             self.height,
         );
 
-        // Re-ignite the fire directly under the mouse cursor (fire-cell
-        // coordinates) so the flames follow the pointer each frame.
-        if let Some((cx, cy)) = self.cursor {
-            self.ignite_at(cx, cy);
+        // Advance the cursor fire ball with momentum: a spring pulls it
+        // towards the target (cursor cell) while damping sheds speed, so it
+        // glides after the mouse with realistic inertia and mild overshoot.
+        if let Some((tx, ty)) = self.cursor {
+            let ax = (tx as f64 + 0.5 - self.ball_x) * self.mouse_fire_accel;
+            let ay = (ty as f64 + 0.5 - self.ball_y) * self.mouse_fire_accel;
+            self.ball_vx += ax * dt;
+            self.ball_vy += ay * dt;
+            let damping = (-self.mouse_fire_damping * dt).exp();
+            self.ball_vx *= damping;
+            self.ball_vy *= damping;
+            self.ball_x += self.ball_vx * dt;
+            self.ball_y += self.ball_vy * dt;
+
+            // Bounce off the screen edges with energy loss.
+            let max_x = self.width as f64 - 1.0;
+            let max_y = self.height as f64 - 1.0;
+            if self.ball_x < 0.0 {
+                self.ball_x = 0.0;
+                self.ball_vx = -self.ball_vx * 0.5;
+            } else if self.ball_x > max_x {
+                self.ball_x = max_x;
+                self.ball_vx = -self.ball_vx * 0.5;
+            }
+            if self.ball_y < 0.0 {
+                self.ball_y = 0.0;
+                self.ball_vy = -self.ball_vy * 0.5;
+            } else if self.ball_y > max_y {
+                self.ball_y = max_y;
+                self.ball_vy = -self.ball_vy * 0.5;
+            }
+
+            self.ignite_at(self.ball_x, self.ball_y);
         }
 
         // Animate Aurora palette by mutating it each frame
@@ -123,17 +164,28 @@ impl DoomFire {
         }
     }
 
-    /// Sets the fire-cell coordinates where the cursor fire should burn;
-    /// None stops cursor ignition (e.g. while paused).
+    /// Sets the target fire-cell coordinates for the cursor fire; None stops
+    /// cursor ignition (e.g. while paused). When a target appears after None,
+    /// the ball snaps to it so it doesn't fly in from a stale position.
     pub fn set_cursor(&mut self, cell: Option<(usize, usize)>) {
+        if self.cursor.is_none() {
+            if let Some((x, y)) = cell {
+                self.ball_x = x as f64 + 0.5;
+                self.ball_y = y as f64 + 0.5;
+                self.ball_vx = 0.0;
+                self.ball_vy = 0.0;
+            }
+        }
         self.cursor = cell;
     }
 
-    /// Paints a disc of heat centred on the cursor cell. The existing
+    /// Paints a disc of heat centred on the cursor fire ball. The existing
     /// propagation pass then carries that heat upward, producing a plume
     /// that rises from the cursor. Heat falls off towards the disc edge,
     /// with slight random flicker for liveliness.
-    fn ignite_at(&mut self, cx: usize, cy: usize) {
+    fn ignite_at(&mut self, cx: f64, cy: f64) {
+        let cx = cx.round() as i32;
+        let cy = cy.round() as i32;
         let max = if self.palette.is_empty() {
             0
         } else {
@@ -147,8 +199,8 @@ impl DoomFire {
                 if dist2 > half2 || half2 == 0 {
                     continue;
                 }
-                let x = cx as i32 + dx;
-                let y = cy as i32 + dy;
+                let x = cx + dx;
+                let y = cy + dy;
                 if x < 0 || x >= self.width as i32 || y < 0 || y >= self.height as i32 {
                     continue;
                 }

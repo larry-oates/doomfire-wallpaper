@@ -82,6 +82,8 @@ fire_type = "Original"
 # show_fps = false
 # mouse_follow = true
 # mouse_fire_size = 6
+# mouse_fire_accel = 25.0
+# mouse_fire_damping = 5.0
 "#;
 
 /// Commands sent from the UI loop to the render worker.
@@ -408,7 +410,14 @@ fn worker_loop(
     show_fps: bool,
     background_color: [u8; 3],
 ) {
+    // Real frame delta-time for the cursor fire ball's physics so momentum
+    // stays frame-rate independent.
+    let mut last_update = Instant::now();
     while let Ok(cmd) = cmd_rx.recv() {
+        let now = Instant::now();
+        // Clamp dt so pauses/stalls can't push the ball through the screen.
+        let dt = now.duration_since(last_update).as_secs_f64().clamp(0.001, 0.25);
+        last_update = now;
         match cmd {
             FireCommand::Pause { clear, burn } => {
                 if clear {
@@ -427,7 +436,7 @@ fn worker_loop(
                     fire.initialize_fire();
                 }
                 fire.set_cursor(pointer);
-                fire.update();
+                fire.update(dt);
                 if show_fps {
                     draw_fps(&mut fire, fps_value);
                 }
