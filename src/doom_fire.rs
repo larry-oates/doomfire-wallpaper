@@ -75,7 +75,7 @@ impl DoomFire {
             ball_y: 0.0,
             ball_vx: 0.0,
             ball_vy: 0.0,
-            mouse_fire_size: config.mouse_fire_size.unwrap_or(6).max(1),
+            mouse_fire_size: config.mouse_fire_size.unwrap_or(14).max(1),
             mouse_fire_accel: config.mouse_fire_accel.unwrap_or(3.0).max(0.0),
             mouse_fire_damping: config.mouse_fire_damping.unwrap_or(0.8).max(0.0),
         };
