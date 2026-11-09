@@ -43,7 +43,18 @@ fn main() -> Result<()> {
     run_wallpaper()
 }
 
-/// Creates the default config file if it doesn't exist.
+/// Keys added by later versions, appended to an existing config file with
+/// their default values so the file always documents every option. Values
+/// already present in the user's file are never touched.
+const CONFIG_UPGRADES: &[(&str, &str)] = &[
+    ("mouse_follow", "mouse_follow = true"),
+    ("mouse_fire_size", "mouse_fire_size = 6"),
+    ("mouse_fire_accel", "mouse_fire_accel = 3.0"),
+    ("mouse_fire_damping", "mouse_fire_damping = 0.8"),
+];
+
+/// Creates the default config file if it doesn't exist, or tops up an existing
+/// one with any missing option keys (e.g. added in newer versions).
 fn ensure_config_exists() -> Result<()> {
     let config_path = get_config_path()?;
     if !config_path.exists() {
@@ -56,7 +67,35 @@ fn ensure_config_exists() -> Result<()> {
         file.write_all(DEFAULT_CONFIG.as_bytes())
             .context("Failed to write default config")?;
         println!("Created default config at {config_path:?}");
+        return Ok(());
     }
+
+    let content = fs::read_to_string(&config_path)
+        .with_context(|| format!("Failed to read config file at {config_path:?}"))?;
+    let parsed: toml::Table = match toml::from_str(&content) {
+        Ok(table) => table,
+        Err(e) => {
+            eprintln!("Skipping config top-up, file is not valid TOML: {e}");
+            return Ok(());
+        }
+    };
+    let missing: Vec<&str> = CONFIG_UPGRADES
+        .iter()
+        .filter(|(key, _)| !parsed.contains_key(*key))
+        .map(|(_, line)| *line)
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+
+    let mut file = fs::OpenOptions::new()
+        .append(true)
+        .open(&config_path)
+        .with_context(|| format!("Failed to open config file at {config_path:?}"))?;
+    let block = format!("\n# Added by doomfire-wallpaper (defaults, safe to change)\n{}\n", missing.join("\n"));
+    file.write_all(block.as_bytes())
+        .context("Failed to append new config options")?;
+    println!("Added new default options to config at {config_path:?}");
     Ok(())
 }
 
@@ -81,7 +120,7 @@ fire_type = "Original"
 # wind_strength = 0.5
 # show_fps = false
 # mouse_follow = true
-# mouse_fire_size = 6
+# mouse_fire_size = 14
 # mouse_fire_accel = 3.0
 # mouse_fire_damping = 0.8
 "#;
