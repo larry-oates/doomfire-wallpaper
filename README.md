@@ -88,8 +88,8 @@ image_path = "/path/to/image.png" # Optional: Path to an image. Used for "image"
 show_fps = false # Optional: false (default). If true, displays FPS counter in top right
 mouse_follow = true # Optional: true (default). Makes fire emit from under the mouse cursor
 mouse_fire_size = 14 # Optional: 14 (default). Width of the cursor fire, in fire cells (screen units / scale)
-mouse_fire_speed = 600.0 # Optional: 600.0 (default). Speed cap of the cursor fire ball, in fire cells per second (also bounds possible acceleration)
-mouse_fire_accel = 8.0 # Optional: 8.0 (default). Spring stiffness of the ball attached to the cursor (lower = lazier arc and bigger overshoots)
+mouse_fire_speed = 1200.0 # Optional: 1200.0 (default). Speed cap of the cursor fire ball, in fire cells per second (also bounds possible acceleration)
+mouse_fire_accel = 10.0 # Optional: 10.0 (default). Spring stiffness of the ball attached to the cursor (lower = lazier arc and bigger overshoots)
 mouse_fire_damping = 1.4 # Optional: 1.4 (default). Drag on the ball's velocity (lower = more momentum and more/larger overshoots)
 
 ```
