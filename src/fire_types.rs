@@ -132,18 +132,15 @@ pub fn generate_palette(fire_type: FireType, background_colour: Option<[u8; 3]>,
                 [r, g, b]
             })
             .collect(),
-        FireType::Aurora => {
-            let phase = phase;
-            (0..=36)
-                .map(|i| {
-                    let t = i as f32 / 36.0;
-                    let r = (60.0 * (0.5 + 0.5 * ((t * 6.0 + 1.0 + phase).sin()))).max(0.0) as u8;
-                    let g = (180.0 * (0.5 + 0.5 * ((t * 2.5 + 2.0 + phase * 0.7).sin())) + 60.0).min(255.0) as u8;
-                    let b = (200.0 * (0.5 + 0.5 * ((t * 3.5 + 4.0 + phase * 1.3).cos()))).min(255.0) as u8;
-                    [r, g, b]
-                })
-                .collect()
-        },
+        FireType::Aurora => (0..=36)
+            .map(|i| {
+                let t = i as f32 / 36.0;
+                let r = (60.0 * (0.5 + 0.5 * ((t * 6.0 + 1.0 + phase).sin()))).max(0.0) as u8;
+                let g = (180.0 * (0.5 + 0.5 * ((t * 2.5 + 2.0 + phase * 0.7).sin())) + 60.0).min(255.0) as u8;
+                let b = (200.0 * (0.5 + 0.5 * ((t * 3.5 + 4.0 + phase * 1.3).cos()))).min(255.0) as u8;
+                [r, g, b]
+            })
+            .collect(),
         FireType::Plasma => (0..=36)
             .map(|i| {
                 let t = i as f32 / 36.0;

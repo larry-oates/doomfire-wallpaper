@@ -1,5 +1,19 @@
 use std::process::Command;
 
+/// Returns the current cursor position in global screen coordinates, as
+/// reported by Hyprland. Returns None if Hyprland is unavailable.
+pub fn get_cursor_position() -> Option<(i32, i32)> {
+    let output = Command::new("hyprctl")
+        .args(["cursorpos", "-j"])
+        .output()
+        .ok()?;
+    let cursor: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    Some((
+        cursor.get("x")?.as_i64()? as i32,
+        cursor.get("y")?.as_i64()? as i32,
+    ))
+}
+
 pub fn is_system_sleeping() -> bool {
     let output = Command::new("systemctl")
         .args(["is-system-running"])
@@ -43,10 +57,10 @@ pub fn get_outputs_covered() -> Vec<(String, bool)> {
             {
                 continue;
             }
-            if client
+            if !client
                 .get("mapped")
                 .and_then(|m| m.as_bool())
-                .unwrap_or(true) == false
+                .unwrap_or(true)
             {
                 continue;
             }

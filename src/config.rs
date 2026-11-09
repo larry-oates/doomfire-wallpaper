@@ -21,6 +21,8 @@ pub struct Config {
     pub wind_strength: Option<f64>,
     pub show_fps: Option<bool>,
     pub image_path: Option<String>,
+    pub mouse_follow: Option<bool>,
+    pub mouse_fire_size: Option<usize>,
 }
 
 impl Config {
@@ -44,6 +46,8 @@ impl Config {
             wind_strength: config.wind_strength.or(default.wind_strength),
             show_fps: config.show_fps.or(default.show_fps),
             image_path: config.image_path.or(default.image_path),
+            mouse_follow: config.mouse_follow.or(default.mouse_follow),
+            mouse_fire_size: config.mouse_fire_size.or(default.mouse_fire_size),
         }
     }
 }
@@ -63,6 +67,8 @@ impl Default for Config {
             wind_strength: Some(0.5),
             show_fps: Some(false),
             image_path: None,
+            mouse_follow: Some(true),
+            mouse_fire_size: Some(6),
         }
     }
 }

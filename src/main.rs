@@ -8,7 +8,7 @@ pub mod particle;
 
 use crate::config::{Config, ScreenBurn};
 use crate::doom_fire::DoomFire;
-use crate::wallpaper::{get_outputs_covered, is_system_sleeping};
+use crate::wallpaper::{get_cursor_position, get_outputs_covered, is_system_sleeping};
 use anyhow::{Context, Result};
 use gtk4 as gtk;
 use gtk::prelude::*;
@@ -49,13 +49,13 @@ fn ensure_config_exists() -> Result<()> {
     if !config_path.exists() {
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create config directory at {:?}", parent))?;
+                .with_context(|| format!("Failed to create config directory at {parent:?}"))?;
         }
         let mut file = fs::File::create(&config_path)
-            .with_context(|| format!("Failed to create config file at {:?}", config_path))?;
+            .with_context(|| format!("Failed to create config file at {config_path:?}"))?;
         file.write_all(DEFAULT_CONFIG.as_bytes())
             .context("Failed to write default config")?;
-        println!("Created default config at {:?}", config_path);
+        println!("Created default config at {config_path:?}");
     }
     Ok(())
 }
@@ -80,6 +80,8 @@ fire_type = "Original"
 # image_path = "/path/to/image.png"
 # wind_strength = 0.5
 # show_fps = false
+# mouse_follow = true
+# mouse_fire_size = 6
 "#;
 
 /// Commands sent from the UI loop to the render worker.
@@ -95,6 +97,9 @@ enum FireCommand {
         init: bool,
         burn: Option<DynamicImage>,
         fps_value: u32,
+        /// Latest cursor position in fire-cell coordinates, if mouse
+        /// following is enabled.
+        pointer: Option<(usize, usize)>,
     },
 }
 
@@ -138,7 +143,7 @@ fn run_wallpaper() -> Result<()> {
 fn build_ui(app: &Application) {
     println!("App Connected!");
     let config = Config::load();
-    println!("Using config: {:?}", config);
+    println!("Using config: {config:?}");
 
     let restart_on_pause = config.restart_on_pause.unwrap_or(false);
     let fps = config.fps.unwrap_or(10);
@@ -149,6 +154,9 @@ fn build_ui(app: &Application) {
     let width = config.screen_width.unwrap();
     let scale = config.scale.unwrap_or(1);
     let background_color = config.background.unwrap_or([0, 0, 0]);
+    let mouse_follow = config.mouse_follow.unwrap_or(true);
+    let fire_width = width / scale;
+    let fire_height = height / scale;
 
     let use_static_burn_image = matches!(screen_burn_config, ScreenBurn::String(ref s) if s == "image");
     let do_screen_burn = use_static_burn_image || matches!(screen_burn_config, ScreenBurn::Bool(true));
@@ -168,7 +176,7 @@ fn build_ui(app: &Application) {
         match image::open(&path) {
             Ok(img) => Some(img.resize_exact(width as u32, height as u32, image::imageops::FilterType::Triangle)),
             Err(e) => {
-                eprintln!("Failed to load image at {:?}: {}", path, e);
+                eprintln!("Failed to load image at {path:?}: {e}");
                 None
             }
         }
@@ -191,6 +199,25 @@ fn build_ui(app: &Application) {
 
     let (frame_tx, frame_rx) = mpsc::channel::<Vec<u8>>();
     let (cmd_tx, cmd_rx) = mpsc::sync_channel::<FireCommand>(3);
+
+    // Poll the pointer position on a background thread so the (blocking)
+    // hyprctl call never stalls the UI loop; positions flow into the tick
+    // callback through a channel and are forwarded to the worker command.
+    let (pos_tx, pos_rx) = mpsc::channel::<(i32, i32)>();
+    if mouse_follow {
+        std::thread::Builder::new()
+            .name("doomfire-cursor".to_owned())
+            .spawn(move || loop {
+                if let Some(pos) = get_cursor_position() {
+                    if pos_tx.send(pos).is_err() {
+                        break; // UI gone
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            })
+            .context("Failed to spawn cursor polling thread")
+            .expect("cursor thread");
+    }
 
     std::thread::Builder::new()
         .name("doomfire-render".to_owned())
@@ -279,6 +306,18 @@ fn build_ui(app: &Application) {
             }
         }
 
+        // Keep only the latest cursor position (drop stale ones) and convert
+        // global screen coordinates into fire-cell coordinates.
+        let mut pointer = None;
+        while let Ok(pos) = pos_rx.try_recv() {
+            pointer = Some(pos);
+        }
+        let pointer = pointer.map(|(x, y)| {
+            let fx = (x.max(0) as usize / scale).min(fire_width.max(1) - 1);
+            let fy = (y.max(0) as usize / scale).min(fire_height.max(1) - 1);
+            (fx, fy)
+        });
+
         // Refresh compositor/system state at a low rate to avoid spawning
         // hyprctl/systemctl processes on every animation tick.
         if ui.last_output_check.elapsed() >= Duration::from_millis(500) {
@@ -319,17 +358,18 @@ fn build_ui(app: &Application) {
             }
 
             // While paused, take screenshots periodically.
-            if do_screen_burn {
-                if !use_static_burn_image && ui.last_screenshot_time.elapsed() >= Duration::from_millis(500) {
-                    ui.last_screenshot_time = Instant::now();
-                    eprintln!("[DEBUG] Taking screenshot while paused");
-                    // Spawn screenshots on background thread
-                    let tx = screenshot_tx.clone();
-                    rayon::spawn(move || {
-                        let results = take_screenshots_sync(&get_outputs_covered());
-                        let _ = tx.send(results);
-                    });
-                }
+            if do_screen_burn
+                && !use_static_burn_image
+                && ui.last_screenshot_time.elapsed() >= Duration::from_millis(500)
+            {
+                ui.last_screenshot_time = Instant::now();
+                eprintln!("[DEBUG] Taking screenshot while paused");
+                // Spawn screenshots on background thread
+                let tx = screenshot_tx.clone();
+                rayon::spawn(move || {
+                    let results = take_screenshots_sync(&get_outputs_covered());
+                    let _ = tx.send(results);
+                });
             }
 
             ui.was_paused = true;
@@ -343,7 +383,7 @@ fn build_ui(app: &Application) {
         let burn = take_burn_screenshot(&mut ui.last_screenshot, &ui.cached_outputs, do_screen_burn);
         ui.was_paused = false;
         // If the worker is behind, skip this tick's update instead of growing the queue.
-        match cmd_tx.try_send(FireCommand::Update { init, burn, fps_value: ui.current_fps }) {
+        match cmd_tx.try_send(FireCommand::Update { init, burn, fps_value: ui.current_fps, pointer }) {
             Ok(()) => ui.vsync_credit -= 1.0,
             Err(mpsc::TrySendError::Full(_)) => {}
             Err(mpsc::TrySendError::Disconnected(_)) => return gtk::glib::ControlFlow::Break,
@@ -374,15 +414,19 @@ fn worker_loop(
                 if clear {
                     fire.pause_fire();
                 }
+                // Stop cursor ignition while paused so its heat doesn't
+                // freeze into the frozen frame.
+                fire.set_cursor(None);
                 if let Some(img) = burn {
                     apply_burn(&mut fire, &img, background_color);
                 }
                 send_frame(&fire, &frame_tx, width, height, scale, show_bg_image, bg_image_bytes.as_deref());
             }
-            FireCommand::Update { init, burn, fps_value } => {
+            FireCommand::Update { init, burn, fps_value, pointer } => {
                 if init {
                     fire.initialize_fire();
                 }
+                fire.set_cursor(pointer);
                 fire.update();
                 if show_fps {
                     draw_fps(&mut fire, fps_value);
@@ -500,7 +544,7 @@ fn apply_burn(fire: &mut DoomFire, screenshot: &DynamicImage, background_color: 
 fn take_screenshots_sync(covered_outputs: &Vec<(String, bool)>) -> Vec<(String, DynamicImage)> {
     let mut results = Vec::new();
     for (name, _covered) in covered_outputs {
-        eprintln!("[DEBUG] Taking screenshot for output: {}", name);
+        eprintln!("[DEBUG] Taking screenshot for output: {name}");
         if let Ok(output) = std::process::Command::new("grim")
             .args(["-o", name, "-"])
             .output()
@@ -509,10 +553,10 @@ fn take_screenshots_sync(covered_outputs: &Vec<(String, bool)>) -> Vec<(String, 
                 if let Ok(i) = image::load_from_memory(&output.stdout) {
                     results.push((name.clone(), i));
                 } else {
-                    eprintln!("[DEBUG] Failed to decode screenshot for {}", name);
+                    eprintln!("[DEBUG] Failed to decode screenshot for {name}");
                 }
             } else {
-                eprintln!("[DEBUG] Screenshot command failed for {}", name);
+                eprintln!("[DEBUG] Screenshot command failed for {name}");
             }
         }
     }

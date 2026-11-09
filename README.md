@@ -86,6 +86,8 @@ pause_on_cover = true   # Optional: true (default) pauses animation when all scr
 screen_burn = false # Optional: false (default), true, or "image". If true, closing windows leaves a burning trail. If "image", the image_path is used for the burn effect.
 image_path = "/path/to/image.png" # Optional: Path to an image. Used for "image" screen_burn mode, or as a static background if screen_burn is false.
 show_fps = false # Optional: false (default). If true, displays FPS counter in top right
+mouse_follow = true # Optional: true (default). Makes fire emit from under the mouse cursor
+mouse_fire_size = 6 # Optional: 6 (default). Width of the cursor fire, in fire cells (screen units / scale)
 
 ```
 
