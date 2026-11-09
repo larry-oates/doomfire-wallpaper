@@ -73,7 +73,7 @@ impl Default for Config {
             image_path: None,
             mouse_follow: Some(true),
             mouse_fire_size: Some(14),
-            mouse_fire_accel: Some(3.0),
+            mouse_fire_accel: Some(2.0),
             mouse_fire_damping: Some(0.8),
         }
     }

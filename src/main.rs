@@ -49,7 +49,7 @@ fn main() -> Result<()> {
 const CONFIG_UPGRADES: &[(&str, &str)] = &[
     ("mouse_follow", "mouse_follow = true"),
     ("mouse_fire_size", "mouse_fire_size = 14"),
-    ("mouse_fire_accel", "mouse_fire_accel = 3.0"),
+    ("mouse_fire_accel", "mouse_fire_accel = 2.0"),
     ("mouse_fire_damping", "mouse_fire_damping = 0.8"),
 ];
 
@@ -121,7 +121,7 @@ fire_type = "Original"
 # show_fps = false
 # mouse_follow = true
 # mouse_fire_size = 14
-# mouse_fire_accel = 3.0
+# mouse_fire_accel = 2.0
 # mouse_fire_damping = 0.8
 "#;
 
