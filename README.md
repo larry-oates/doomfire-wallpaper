@@ -89,8 +89,8 @@ show_fps = false # Optional: false (default). If true, displays FPS counter in t
 mouse_follow = true # Optional: true (default). Makes fire emit from under the mouse cursor
 mouse_fire_size = 14 # Optional: 14 (default). Width of the cursor fire, in fire cells (screen units / scale)
 mouse_fire_speed = 4800.0 # Optional: 4800.0 (default). Hard speed cap of the cursor fire ball, in fire cells per second (only binds on huge screen spans)
-mouse_fire_accel = 60.0 # Optional: 60.0 (default). Spring stiffness of the ball attached to the cursor: acceleration grows with distance, so a far cursor pulls harder
-mouse_fire_damping = 7.0 # Optional: 7.0 (default). Drag on the ball's velocity (lower = more momentum and more/larger overshoots)
+mouse_fire_accel = 75.0 # Optional: 75.0 (default). Spring stiffness of the ball attached to the cursor: acceleration grows with distance, so a far cursor pulls harder
+mouse_fire_damping = 7.5 # Optional: 7.5 (default). Drag on the ball's velocity (lower = more momentum and more/larger overshoots)
 
 ```
 

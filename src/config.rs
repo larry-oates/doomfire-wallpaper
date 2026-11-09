@@ -76,8 +76,8 @@ impl Default for Config {
             mouse_follow: Some(true),
             mouse_fire_size: Some(14),
             mouse_fire_speed: Some(4800.0),
-            mouse_fire_accel: Some(60.0),
-            mouse_fire_damping: Some(7.0),
+            mouse_fire_accel: Some(75.0),
+            mouse_fire_damping: Some(7.5),
         }
     }
 }
