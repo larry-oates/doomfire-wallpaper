@@ -22,6 +22,7 @@ pub struct DoomFire {
     ball_vx: f64,
     ball_vy: f64,
     mouse_fire_size: usize,
+    mouse_fire_speed: f64,
     mouse_fire_accel: f64,
     mouse_fire_damping: f64,
 }
@@ -76,8 +77,9 @@ impl DoomFire {
             ball_vx: 0.0,
             ball_vy: 0.0,
             mouse_fire_size: config.mouse_fire_size.unwrap_or(14).max(1),
-            mouse_fire_accel: config.mouse_fire_accel.unwrap_or(2.0).max(0.0),
-            mouse_fire_damping: config.mouse_fire_damping.unwrap_or(0.8).max(0.0),
+            mouse_fire_speed: config.mouse_fire_speed.unwrap_or(40.0).max(0.0),
+            mouse_fire_accel: config.mouse_fire_accel.unwrap_or(8.0).max(0.001),
+            mouse_fire_damping: config.mouse_fire_damping.unwrap_or(0.2).max(0.0),
         };
         doom_fire.initialize_fire();
         doom_fire
@@ -123,17 +125,50 @@ impl DoomFire {
             self.height,
         );
 
-        // Advance the cursor fire ball with momentum: a spring pulls it
-        // towards the target (cursor cell) while damping sheds speed, so it
-        // glides after the mouse with realistic inertia and mild overshoot.
+        // Advance the cursor fire ball with momentum, using Craig Reynolds'
+        // "simple vehicle model" with the arrival steering behavior (GDC 99):
+        // a point mass with a kinetic top speed (max_speed) and a thrust limit
+        // (max_force), so the ball cruises at a capped speed, coasts on its
+        // existing velocity, and decelerates naturally as it reaches the
+        // cursor. A pure spring has no speed cap, which made the ball snap.
         if let Some((tx, ty)) = self.cursor {
-            let ax = (tx as f64 + 0.5 - self.ball_x) * self.mouse_fire_accel;
-            let ay = (ty as f64 + 0.5 - self.ball_y) * self.mouse_fire_accel;
-            self.ball_vx += ax * dt;
-            self.ball_vy += ay * dt;
+            let target_x = tx as f64 + 0.5;
+            let target_y = ty as f64 + 0.5;
+            let dx = target_x - self.ball_x;
+            let dy = target_y - self.ball_y;
+            let dist = (dx * dx + dy * dy).sqrt().max(f64::EPSILON);
+
+            // Arrival: desired speed ramps down inside the distance needed to
+            // brake from top speed under max_force (kinematics, v^2 = 2ax).
+            // Slight margin stops constant micro-oscillation at the target.
+            let accel = self.mouse_fire_accel.max(0.001);
+            let braking_dist = self.mouse_fire_speed * self.mouse_fire_speed / (2.0 * accel);
+            let desired_speed = (self.mouse_fire_speed).min(
+                self.mouse_fire_speed * dist / (braking_dist * 1.5).max(1.0),
+            );
+
+            // Steering = desired velocity - current velocity, truncated to the
+            // thrust limit ("steering" force in Reynolds' model).
+            let mut steer_x = (dx / dist) * desired_speed - self.ball_vx;
+            let mut steer_y = (dy / dist) * desired_speed - self.ball_vy;
+            let steer_mag = (steer_x * steer_x + steer_y * steer_y).sqrt();
+            if steer_mag > accel {
+                steer_x = steer_x / steer_mag * accel;
+                steer_y = steer_y / steer_mag * accel;
+            }
+            self.ball_vx += steer_x * dt;
+            self.ball_vy += steer_y * dt;
+
+            // Optional friction (drag) plus a kinematic speed limit.
             let damping = (-self.mouse_fire_damping * dt).exp();
             self.ball_vx *= damping;
             self.ball_vy *= damping;
+            let speed = (self.ball_vx * self.ball_vx + self.ball_vy * self.ball_vy).sqrt();
+            if speed > self.mouse_fire_speed && speed > 0.0 {
+                self.ball_vx *= self.mouse_fire_speed / speed;
+                self.ball_vy *= self.mouse_fire_speed / speed;
+            }
+
             self.ball_x += self.ball_vx * dt;
             self.ball_y += self.ball_vy * dt;
 
