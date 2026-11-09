@@ -49,9 +49,9 @@ fn main() -> Result<()> {
 const CONFIG_UPGRADES: &[(&str, &str)] = &[
     ("mouse_follow", "mouse_follow = true"),
     ("mouse_fire_size", "mouse_fire_size = 14"),
-    ("mouse_fire_speed", "mouse_fire_speed = 1200.0"),
-    ("mouse_fire_accel", "mouse_fire_accel = 10.0"),
-    ("mouse_fire_damping", "mouse_fire_damping = 1.4"),
+    ("mouse_fire_speed", "mouse_fire_speed = 4800.0"),
+    ("mouse_fire_accel", "mouse_fire_accel = 60.0"),
+    ("mouse_fire_damping", "mouse_fire_damping = 7.0"),
 ];
 
 /// Creates the default config file if it doesn't exist, or tops up an existing
@@ -122,9 +122,9 @@ fire_type = "Original"
 # show_fps = false
 # mouse_follow = true
 # mouse_fire_size = 14
-# mouse_fire_speed = 1200.0
-# mouse_fire_accel = 10.0
-# mouse_fire_damping = 1.4
+# mouse_fire_speed = 4800.0
+# mouse_fire_accel = 60.0
+# mouse_fire_damping = 7.0
 "#;
 
 /// Commands sent from the UI loop to the render worker.
