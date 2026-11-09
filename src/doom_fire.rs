@@ -86,6 +86,10 @@ impl DoomFire {
     }
 
     pub fn update(&mut self, dt: f64) {
+        // The bottom row is the fire's generator row; the cursor ball's
+        // ignition disc can overwrite it, so re-fuel it every frame so
+        // scorched cells return to full heat once the ball moves on.
+        self.refuel_bottom_row();
         let rng = &mut self.rng;
         self.t += 0.03; // Increase frequency for more rapid wind changes
         let noise_val = perlin_noise_1d(self.t * 1.5);
@@ -238,18 +242,24 @@ impl DoomFire {
         // Clear the pixel buffer
         self.pixel_buffer.iter_mut().for_each(|x| *x = 0);
 
-        // Initialize the bottom row
+        self.refuel_bottom_row();
+
+        self.particles.clear(); // Clear particles on reset
+    }
+
+    /// Fills the bottom row with the maximum heat values that feed the
+    /// fire's upward propagation (palette-tail values for Candy-type fires).
+    fn refuel_bottom_row(&mut self) {
+        let row = (self.height - 1) * self.width;
         for x in 0..self.width {
             if self.fire_type == FireType::Candy {
                 let rand: usize = self.rng.random_range(self.palette.len() / 2..self.palette.len());
-                self.pixel_buffer[(self.height - 1) * self.width + x] = rand as u8;
+                self.pixel_buffer[row + x] = rand as u8;
             } else {
                 // For other palettes, we start with the last color in the palette
-                self.pixel_buffer[(self.height - 1) * self.width + x] = (self.palette.len() - 1) as u8;
+                self.pixel_buffer[row + x] = (self.palette.len() - 1) as u8;
             }
         }
-
-        self.particles.clear(); // Clear particles on reset
     }
 
     // Set the paused screen for the fire - purely background color
