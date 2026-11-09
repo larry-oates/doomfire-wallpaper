@@ -82,8 +82,8 @@ fire_type = "Original"
 # show_fps = false
 # mouse_follow = true
 # mouse_fire_size = 6
-# mouse_fire_accel = 25.0
-# mouse_fire_damping = 5.0
+# mouse_fire_accel = 10.0
+# mouse_fire_damping = 4.0
 "#;
 
 /// Commands sent from the UI loop to the render worker.

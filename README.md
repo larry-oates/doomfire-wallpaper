@@ -88,8 +88,8 @@ image_path = "/path/to/image.png" # Optional: Path to an image. Used for "image"
 show_fps = false # Optional: false (default). If true, displays FPS counter in top right
 mouse_follow = true # Optional: true (default). Makes fire emit from under the mouse cursor
 mouse_fire_size = 6 # Optional: 6 (default). Width of the cursor fire, in fire cells (screen units / scale)
-mouse_fire_accel = 25.0 # Optional: 25.0 (default). Spring strength pulling the cursor fire towards the mouse (higher = snappier)
-mouse_fire_damping = 5.0 # Optional: 5.0 (default). Velocity damping (higher = less inertia/overshoot)
+mouse_fire_accel = 10.0 # Optional: 10.0 (default). Spring strength pulling the cursor fire towards the mouse (higher = snappier, lower = slower/laggier)
+mouse_fire_damping = 4.0 # Optional: 4.0 (default). Velocity damping (higher = less inertia/overshoot)
 
 ```
 
