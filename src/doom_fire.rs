@@ -76,7 +76,8 @@ impl DoomFire {
             ball_y: 0.0,
             ball_vx: 0.0,
             ball_vy: 0.0,
-            mouse_fire_size: config.mouse_fire_size.unwrap_or(14).max(1),
+            // 0 disables the cursor fire ball (and all its associated logic).
+            mouse_fire_size: config.mouse_fire_size.unwrap_or(0),
             mouse_fire_speed: config.mouse_fire_speed.unwrap_or(4800.0).max(0.0),
             mouse_fire_accel: config.mouse_fire_accel.unwrap_or(75.0).max(0.0),
             mouse_fire_damping: config.mouse_fire_damping.unwrap_or(7.5).max(0.0),
@@ -135,7 +136,10 @@ impl DoomFire {
         // when stretched), and nearby targets give gentle, small wobble.
         // Velocity is bounded only by the kinematic top speed cap so freak
         // jumps (e.g. across multi-monitor spans) can't teleport the ball.
-        if let Some((tx, ty)) = self.cursor {
+        // A size of 0 disables the cursor ball entirely: no spring physics,
+        // no edge bouncing, no ignition disc.
+        if self.mouse_fire_size > 0 {
+            if let Some((tx, ty)) = self.cursor {
             let target_x = tx as f64 + 0.5;
             let target_y = ty as f64 + 0.5;
             let dx = target_x - self.ball_x;
@@ -177,6 +181,7 @@ impl DoomFire {
             }
 
             self.ignite_at(self.ball_x, self.ball_y);
+            }
         }
 
         // Animate Aurora palette by mutating it each frame
@@ -189,6 +194,9 @@ impl DoomFire {
     /// cursor ignition (e.g. while paused). When a target appears after None,
     /// the ball snaps to it so it doesn't fly in from a stale position.
     pub fn set_cursor(&mut self, cell: Option<(usize, usize)>) {
+        if self.mouse_fire_size == 0 {
+            return;
+        }
         if self.cursor.is_none() {
             if let Some((x, y)) = cell {
                 self.ball_x = x as f64 + 0.5;

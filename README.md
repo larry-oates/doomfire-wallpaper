@@ -87,7 +87,7 @@ screen_burn = false # Optional: false (default), true, or "image". If true, clos
 image_path = "/path/to/image.png" # Optional: Path to an image. Used for "image" screen_burn mode, or as a static background if screen_burn is false.
 show_fps = false # Optional: false (default). If true, displays FPS counter in top right
 mouse_follow = true # Optional: true (default). Makes fire emit from under the mouse cursor
-mouse_fire_size = 14 # Optional: 14 (default). Width of the cursor fire, in fire cells (screen units / scale)
+mouse_fire_size = 0 # Optional: 0 (default, disables the cursor fire). Width of the cursor fire, in fire cells (screen units / scale); 0 disables it entirely
 mouse_fire_speed = 4800.0 # Optional: 4800.0 (default). Hard speed cap of the cursor fire ball, in fire cells per second (only binds on huge screen spans)
 mouse_fire_accel = 75.0 # Optional: 75.0 (default). Spring stiffness of the ball attached to the cursor: acceleration grows with distance, so a far cursor pulls harder
 mouse_fire_damping = 7.5 # Optional: 7.5 (default). Drag on the ball's velocity (lower = more momentum and more/larger overshoots)

@@ -74,7 +74,8 @@ impl Default for Config {
             show_fps: Some(false),
             image_path: None,
             mouse_follow: Some(true),
-            mouse_fire_size: Some(14),
+            // 0 disables the cursor fire ball (and all its logic) entirely.
+            mouse_fire_size: Some(0),
             mouse_fire_speed: Some(4800.0),
             mouse_fire_accel: Some(75.0),
             mouse_fire_damping: Some(7.5),

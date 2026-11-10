@@ -48,7 +48,7 @@ fn main() -> Result<()> {
 /// already present in the user's file are never touched.
 const CONFIG_UPGRADES: &[(&str, &str)] = &[
     ("mouse_follow", "mouse_follow = true"),
-    ("mouse_fire_size", "mouse_fire_size = 14"),
+    ("mouse_fire_size", "mouse_fire_size = 0"),
     ("mouse_fire_speed", "mouse_fire_speed = 4800.0"),
     ("mouse_fire_accel", "mouse_fire_accel = 75.0"),
     ("mouse_fire_damping", "mouse_fire_damping = 7.5"),
@@ -121,7 +121,7 @@ fire_type = "Original"
 # wind_strength = 0.5
 # show_fps = false
 # mouse_follow = true
-# mouse_fire_size = 14
+# mouse_fire_size = 0 # 0 disables the cursor fire entirely
 # mouse_fire_speed = 4800.0
 # mouse_fire_accel = 75.0
 # mouse_fire_damping = 7.5
@@ -209,7 +209,8 @@ fn build_ui(app: &Application) {
     let width = config.screen_width.unwrap();
     let scale = config.scale.unwrap_or(1);
     let background_color = config.background.unwrap_or([0, 0, 0]);
-    let mouse_follow = config.mouse_follow.unwrap_or(true);
+    let mouse_follow =
+        config.mouse_follow.unwrap_or(true) && config.mouse_fire_size.unwrap_or(0) > 0;
     let fire_width = width / scale;
     let fire_height = height / scale;
 
