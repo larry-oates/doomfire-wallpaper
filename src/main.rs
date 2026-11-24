@@ -538,6 +538,7 @@ fn worker_loop(
                 // freeze into the frozen frame.
                 fire.set_cursor(None);
                 if let Some(img) = burn {
+                    fire.pixel_buffer.fill(0);
                     apply_burn(&mut fire, &img, background_color);
                 }
                 send_frame(&fire, &frame_tx, width, height, scale, show_bg_image, bg_image_bytes.as_deref());
