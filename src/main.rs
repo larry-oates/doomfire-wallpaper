@@ -553,6 +553,7 @@ fn worker_loop(
                     draw_fps(&mut fire, fps_value);
                 }
                 if let Some(img) = burn {
+                    fire.pixel_buffer.fill(0);
                     apply_burn(&mut fire, &img, background_color);
                 }
                 send_frame(&fire, &frame_tx, width, height, scale, show_bg_image, bg_image_bytes.as_deref());
