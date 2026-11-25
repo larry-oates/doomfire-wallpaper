@@ -8,10 +8,15 @@ use std::time::Duration;
 /// Set by the compositor event listener whenever a Hyprland event may change
 /// workspace/monitor coverage; consumed by the UI tick callback.
 static OUTPUTS_DIRTY: AtomicBool = AtomicBool::new(false);
+static WORKSPACE_CHANGED: AtomicBool = AtomicBool::new(false);
 
 /// Consumes the flag set by the event listener.
 pub fn take_outputs_dirty() -> bool {
     OUTPUTS_DIRTY.swap(false, Ordering::Relaxed)
+}
+
+pub fn take_workspace_changed() -> bool {
+    WORKSPACE_CHANGED.swap(false, Ordering::Relaxed)
 }
 
 /// Hyprland's socket2 event socket, if we are in a Hyprland session.
@@ -50,6 +55,13 @@ const COVERAGE_EVENTS: &[&str] = &[
     "configreloaded>>",
 ];
 
+const WORKSPACE_EVENTS: &[&str] = &[
+    "workspace>>",
+    "workspacev2>>",
+    "specialworkspace>>",
+    "specialworkspacev2>>",
+];
+
 /// Listens to Hyprland socket2 events in the background and flags coverage as
 /// dirty when something relevant happens, so the UI reacts within a frame
 /// instead of waiting for the next poll. Falls back to polling in callers.
@@ -63,16 +75,16 @@ pub fn start_compositor_event_listener() {
             let Some(path) = hyprland_socket2_path() else {
                 return;
             };
-            match UnixStream::connect(&path) {
-                Ok(stream) => {
-                    let reader = BufReader::new(stream);
-                    for line in reader.lines().map_while(Result::ok) {
-                        if COVERAGE_EVENTS.iter().any(|e| line.starts_with(e)) {
-                            OUTPUTS_DIRTY.store(true, Ordering::Relaxed);
-                        }
+            if let Ok(stream) = UnixStream::connect(&path) {
+                let reader = BufReader::new(stream);
+                for line in reader.lines().map_while(Result::ok) {
+                    if COVERAGE_EVENTS.iter().any(|e| line.starts_with(e)) {
+                        OUTPUTS_DIRTY.store(true, Ordering::Relaxed);
+                    }
+                    if WORKSPACE_EVENTS.iter().any(|e| line.starts_with(e)) {
+                        WORKSPACE_CHANGED.store(true, Ordering::Relaxed);
                     }
                 }
-                Err(_) => {}
             }
             // Socket dropped (compositor restart) - retry shortly.
             std::thread::sleep(Duration::from_secs(2));

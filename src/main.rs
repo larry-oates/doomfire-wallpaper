@@ -8,7 +8,10 @@ pub mod particle;
 
 use crate::config::{Config, ScreenBurn};
 use crate::doom_fire::DoomFire;
-use crate::wallpaper::{get_cursor_position, get_outputs_covered, is_system_sleeping, take_outputs_dirty};
+use crate::wallpaper::{
+    get_cursor_position, get_outputs_covered, is_system_sleeping, take_outputs_dirty,
+    take_workspace_changed,
+};
 use anyhow::{Context, Result};
 use gtk4 as gtk;
 use gtk::prelude::*;
@@ -151,9 +154,12 @@ enum FireCommand {
 struct UiState {
     last_screenshot: HashMap<String, DynamicImage>,
     was_paused: bool,
-    /// Moment the fire last resumed; in-flight pause-time screenshots are
-    /// accepted for this long afterwards.
+    /// Moment the fire last resumed; a pause-time screenshot is accepted for
+    /// this long only if no burn has been applied yet.
     unpause_at: Instant,
+    /// Whether this resume's burn has been sent. Later screenshots must be
+    /// dropped, or they repaint the trail over the already-animating fire.
+    resume_burn_applied: bool,
     /// Last successfully popped burn; fallback when the newest pause had no
     /// capture finished in time (rapid pause/unpause cycles).
     last_burn: Option<DynamicImage>,
@@ -301,6 +307,7 @@ fn build_ui(app: &Application) {
         last_screenshot: HashMap::new(),
         was_paused: false,
         unpause_at: Instant::now(),
+        resume_burn_applied: true,
         last_burn: None,
         burn_miss_logged: true,
         last_screenshot_time: Instant::now(),
@@ -362,15 +369,15 @@ fn build_ui(app: &Application) {
             return gtk::glib::ControlFlow::Continue;
         }
 
-        // Drain any screenshots produced by background threads. Screenshot
-        // spawns only happen while paused. Keep pause-time batches, including
-        // ones finishing within RESUME_BURN_GRACE after unpause (grim is not
-        // instant, so the resume may beat the capture) - those carry the
-        // pre-switch content wanted for the trail. Anything later would show
-        // the running fire itself and make the burn look like it "reapplies".
+        // Drain screenshots produced while paused. A capture that lands before
+        // the resume burn is applied is still wanted (grim may finish after a
+        // brief cover); once the burn has been sent, drop late results instead
+        // of repainting the trail over the already-animating fire.
         let mut got_new_screenshot = false;
+        let accept_pause_screenshots = ui.was_paused
+            || (!ui.resume_burn_applied && ui.unpause_at.elapsed() < RESUME_BURN_GRACE);
         while let Ok((name, img)) = screenshot_rx.try_recv() {
-            if ui.was_paused || ui.unpause_at.elapsed() < RESUME_BURN_GRACE {
+            if accept_pause_screenshots {
                 ui.last_screenshot.insert(name, img);
                 got_new_screenshot = true;
             }
@@ -390,6 +397,7 @@ fn build_ui(app: &Application) {
         // hyprctl/systemctl processes on every animation tick - except when a
         // compositor event flagged coverage as dirty, which is handled within
         // a frame so pause pauses immediately.
+        let workspace_changed = take_workspace_changed();
         if take_outputs_dirty() || ui.last_output_check.elapsed() >= Duration::from_millis(500) {
             ui.cached_outputs = get_outputs_covered();
             ui.last_output_check = Instant::now();
@@ -415,7 +423,6 @@ fn build_ui(app: &Application) {
                     &mut ui.last_screenshot,
                     &ui.cached_outputs,
                     do_screen_burn,
-                    true,
                 );
                 if burn.is_none() && use_static_burn_image {
                     burn = bg_image_main.clone();
@@ -440,6 +447,12 @@ fn build_ui(app: &Application) {
                         }
                     }
                 }
+            }
+
+            if workspace_changed && do_screen_burn && !use_static_burn_image {
+                ui.last_screenshot_time = Instant::now();
+                eprintln!("[DEBUG] Screenshot forced at workspace switch");
+                spawn_screenshot_capture(screenshot_tx.clone(), &ui.cached_outputs);
             }
 
             // While paused, take screenshots periodically.
@@ -468,31 +481,42 @@ fn build_ui(app: &Application) {
         let just_unpaused = ui.was_paused;
         if just_unpaused {
             ui.unpause_at = Instant::now();
+            ui.resume_burn_applied = false;
+            ui.burn_miss_logged = false;
         }
-        // One pop per tick, allowed within the grace window after resume so
-        // late pause-time captures still burn; afterwards popping would burn
-        // screenshots of the running fire itself.
-        let within_grace = ui.unpause_at.elapsed() < RESUME_BURN_GRACE;
-        let mut burn = take_burn_screenshot(&mut ui.last_screenshot, &ui.cached_outputs, do_screen_burn, true);
+        // One burn per resume: a cached/late pause-time capture, or the last
+        // real trail if the newest pause had no capture finished in time.
+        let may_burn_on_resume = just_unpaused
+            || (!ui.resume_burn_applied && ui.unpause_at.elapsed() < RESUME_BURN_GRACE);
+        let mut burn = if may_burn_on_resume {
+            take_burn_screenshot(&mut ui.last_screenshot, &ui.cached_outputs, do_screen_burn)
+        } else {
+            None
+        };
         if let Some(img) = burn.as_ref() {
             ui.last_burn = Some(img.clone());
         }
-        if just_unpaused {
-            eprintln!("[DEBUG {:.3}] Fire unpaused, burn={:?}", debug_ts(), burn.is_some());
-            ui.burn_miss_logged = burn.is_some();
-        } else if within_grace && burn.is_none() && !ui.burn_miss_logged {
-            eprintln!("[DEBUG {:.3}] No fresh burn within grace", debug_ts());
-            ui.burn_miss_logged = true;
-        }
-        // No fresh capture made it in time (rapid toggles): on the resume tick
-        // only, reuse the last known real trail instead of a blank. Later
-        // grace ticks never re-inject it - the burn must be applied once so
-        // the fire can carry it away.
         if just_unpaused && burn.is_none() {
             if let Some(prev) = ui.last_burn.clone() {
                 eprintln!("[DEBUG {:.3}] Falling back to last known burn", debug_ts());
                 burn = Some(prev);
             }
+        }
+        if burn.is_some() {
+            ui.resume_burn_applied = true;
+            ui.burn_miss_logged = true;
+        } else if !ui.resume_burn_applied
+            && ui.unpause_at.elapsed() >= RESUME_BURN_GRACE
+            && !ui.burn_miss_logged
+        {
+            eprintln!("[DEBUG {:.3}] No fresh burn within grace", debug_ts());
+            ui.burn_miss_logged = true;
+        }
+        if just_unpaused {
+            eprintln!("[DEBUG {:.3}] Fire unpaused, burn={:?}", debug_ts(), burn.is_some());
+        }
+        if ui.resume_burn_applied || ui.unpause_at.elapsed() >= RESUME_BURN_GRACE {
+            ui.last_screenshot.clear();
         }
         ui.was_paused = false;
         // If the worker is behind, skip this tick's update instead of growing the queue.
@@ -619,32 +643,25 @@ fn send_frame(
     let _ = frame_tx.send(pixels);
 }
 
-/// Window after unpause during which in-flight pause-time screenshots are
-/// still accepted/burned.
+/// Window after unpause in which a late pause-time screenshot can still be
+/// used as the resume burn, if no burn has been applied yet.
 const RESUME_BURN_GRACE: Duration = Duration::from_millis(250);
 
 /// Pops a screenshot to burn into the fire, if burn mode is active and some
-/// output is uncovered. Pass `allow_pop=false` (outside the resume grace
-/// window) to run without consuming: it just reports cache misses.
+/// output is uncovered.
 fn take_burn_screenshot(
     last_screenshot: &mut HashMap<String, DynamicImage>,
     covered_outputs: &[(String, bool)],
     do_screen_burn: bool,
-    allow_pop: bool,
 ) -> Option<DynamicImage> {
     if !do_screen_burn {
         return None;
     }
     if let Some((name, _)) = covered_outputs.iter().find(|(_, c)| !*c) {
         if let Some(img) = last_screenshot.remove(name) {
-            if allow_pop {
-                last_screenshot.clear();
-                eprintln!("[DEBUG {:.3}] Popping burn for output {} (had cached image)", debug_ts(), name);
-                return Some(img);
-            }
-            // Outside the grace window: put it back, don't burn here.
-            last_screenshot.insert(name.clone(), img);
-            return None;
+            last_screenshot.clear();
+            eprintln!("[DEBUG {:.3}] Popping burn for output {} (had cached image)", debug_ts(), name);
+            return Some(img);
         }
     }
     None
